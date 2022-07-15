@@ -1010,3 +1010,302 @@ cv.bilateralFilter(img, 7, sigmaColor = 20, sigmaSpace = 20)
 
 - **双边滤波对椒盐噪声基本没有效果**
 
+### 算子
+
+
+> 边缘是像素值发生跃迁的位置，是图像的显著特征之一，在图像特征提取，对象检测，模式识别等方面都有重要的作用
+  
+- 比如有一幅图像，图里面有一条线，左边很亮右边很暗，就很容易识别到这根线，**也就是像素的灰度值快速变化的地方**
+
+#### 索贝尔(sobel)算子
+
+> sobel算子对图像求一阶导数，一阶导数越大，说明像素在该方向的变化越大，边缘信号越强
+> 因为图像的灰度值都是离散的数字，因此采用离散差分算子计算图像像素点亮度值的近似梯度
+> 图像是二维的，因此沿着宽度和高度两个方向
+
+- 水平方向
+
+$$
+
+G_x = \begin{bmatrix}
+
+-1 & 0 & +1 \\\
+
+-2 & 0 & +2 \\\
+
+-1 & 0 & +1
+
+\end{bmatrix} * I
+
+$$
+
+- 垂直方向
+
+$$
+
+G_y = \begin{bmatrix}
+
+-1 & -2 & -1 \\\
+
+0 & 0 & 0 \\\
+
++1 & +2 & +1
+
+\end{bmatrix} * I
+
+$$
+
+- 综合考虑两个方向的变化
+
+$$
+
+G = \sqrt{G_x^2 + G_y^2}
+
+$$
+
+- 但有时候为了简化，可以直接用绝对值相加代替
+
+$$
+
+G = |G_X| + | G_Y |
+
+$$
+
+- Sobel(src, ddepth, dx, dy[, dst[, ksize[, scale[, delta[, borderType]]]]])
+
+```python
+
+img = cv.imread('path')
+
+dx = cv.Sobel(img, cv.CV_64F, dx = 1, dy = 0, ksize = 3)
+
+dy = cv.Sobel(img, cv.CV_64F, dx = 0, dy = 1, ksize = 3)
+
+new_img = cv.add(dx, dy)
+
+# new_img = cv.addWeighted(dx, 0.5, dy, 0.5, gamma = 0)
+
+```
+
+- 注意：
+
+	- **ksize在这里也是一个值**
+	- Sobel**需要分别求出x轴和y轴的梯度，因此需要自己手动合并**
+
+  
+
+#### 沙尓(Scharr)算子
+
+- Scharr(src, ddepth, dx, dy[, dst[, scale[, delta[, borderType]]]])
+
+	- **当内核大小为3时，Sobel可能产生较大的误差，因此OpenCV提供了Scharr来解决**
+	- **但，Scharr仅适用于核大小为3**
+
+$$
+
+G_x = \begin{bmatrix}
+
+-3 & 0 & +3 \\\
+
+-10 & 0 & +10 \\\
+
+-13& 0 & +3
+
+\end{bmatrix}
+
+$$
+
+$$
+
+G_y = \begin{bmatrix}
+
+-3 & -10 & -3 \\\
+
+0 & 0 & 0 \\\
+
++3 & +10 & +3
+
+\end{bmatrix}
+
+$$
+
+```python
+
+img = cv.imread('path')
+
+dx = cv.ScharrS(img, cv.CV_64F, dx = 1, dy = 0)
+
+dy = cv.ScharrS(img, cv.CV_64F, dx = 0, dy = 1)
+
+new_img = cv.add(dx, dy)
+
+# new_img = cv.addWeighted(dx, 0.5, dy, 0.5, gamma = 0)
+
+```
+
+- 注意：
+
+	- **Scharr依旧需要分别求dx,dy**
+	- **Sobel的ksize设置为-1的时候，就相当于Scharr**
+
+#### 拉普拉斯算子
+
+> 边缘处的导数是零，利用这个特性也可以求的图像的边缘。**但是，二阶求导为0的位置也有可能是毫无意义的位置**
+
+- 拉普拉斯推导
+	- x方向
+		- 一阶差分：$f'(x) = f(x) - f(x - 1)$
+		- 二阶差分：$f''(x) = f'(x + 1) - f'(x) = (f(x + 1) - f(x)) - (f(x) - f(x - 1))$
+		- 化简：$f''(x) = f(x - 1) - 2f(x) + f(x + 1)$
+		- 同理得到：$f''(y) = f(y - 1) - 2f(y) + f(y + 1)$
+	- 叠加x,y
+		- $f''(x, y) = f'_x(x, y) + f'_y(x, y)$
+		- $f''(x, y) = f(x - 1, y) + f(x + 1, y) + f(x, y - 1) + f(x, y + 1) - 4f(x, y)$
+
+$$
+
+f''(x, y) =
+
+\begin{bmatrix}
+
+0 & 1 & 0 \\\
+
+1 & -4 & 1 \\\
+
+0 & 1 & 0
+
+\end{bmatrix} \odot
+
+\begin{bmatrix}
+
+f(x - 1, y - 1) & f(x, y -1) & f(x + 1, y - 1)\\\
+
+f(x - 1, y) & f(x, y) & f(x + 1, y) \\\
+
+f(x - 1, y + 1) & f(x, y + 1) & f(x + 1, y + 1)
+
+\end{bmatrix}
+
+$$
+
+- Laplacian(src, ddepth, dst[, ksize[, delta[, borderType]]])
+	- **拉普拉斯算子可以同时求两个方向边缘**
+	- **对噪声敏感，一般需要先去噪再调用拉普拉斯**
+
+```python
+
+img = cv.imread('path')
+
+new_img = cv.Laplacian(img, -1, ksize = 3)
+
+```
+
+#### 边缘检测Canny
+
+> 边缘检测Canny是一个多级边缘检测算法，也是被人认为的**最优算法**
+>> 低错误率：标示出尽可能多的实际边缘，同时尽可能的减少噪声产生的误报
+>> 高定位性：标示出的边缘要与图像中的实际边缘尽可能接近
+>> 最小相应：图像中的边缘检测只能标识一次 
+
+- 边缘检测
+
+	- 去噪，**边缘检测容易受到噪声影响，在进行检测之前，一般使用高斯滤波去噪**
+	- 计算梯度：对平滑后的图像采用sobel算子计算梯度和方向
+	- $G = \sqrt{G_x^2 + G_y^2}$
+	- $\theta = arctan{\frac{G_y}{G_x}}$
+	- 梯度方向归为四类：垂直、水平和两个对角线
+	- ![[Pasted image 20220715135706.png]]
+
+- 非极大值抑制
+	- 获取梯度和方向后，遍历图像，**去除所有不是边界的点**
+	- 实现方法：逐个遍历，判断当前像素点是否是周围像素点中**具有同方向梯度的最大值**
+	- 如果是局部最大值，则保留。如果不是，则抑制(归零)
+	- ![[Pasted image 20220715140258.png]]
+- 边界阀值
+	- ![[Pasted image 20220715141556.png]]
+
+- Canny(img, minVal, maxVal, ...)
+
+```python
+
+img = cv.imread('path')
+
+lena1 = cv.Canny(img, 100, 200)
+
+lena2 = cv.Canny(img, 64, 128)
+
+```
+
+- 注意：
+	- 阀值给的越小，图像越细节
+
+### 形态学
+
+#### 概述
+
+- 什么是形态学
+	- 指**一系列处理图像的形状特征的图像处理技术**
+	- 形态学的基本思想是**利用一种特殊的结构元(本质上是卷积核)来测量或提取输入图像中相应的形状或特征，以便进一步图像分析和目标识别**
+	- 处理方法基本上都是对二进制图像进行处理，即黑白图像
+	- 卷积核决定着图像处理后的效果
+	- 形态学常用的基本操作：
+		- 膨胀和腐蚀
+		- 开运算
+		- 闭运算
+		- 顶帽
+		- 黑帽
+
+#### 图像全局二值化
+
+> 二值化：将图像的每个像素变成两种值，比如0,255
+
+- threshold(src, thresh, maxval[, type[, dst]])
+	- src：**最好是灰度图**
+	- thresh：阀值
+	- maxval：最大值，最大值不一定是255
+	- type：操作类型
+
+- 常见操作类型
+
+| 操作类型 | 解释 | 
+| --- | --- |
+| THRESH_BINARY | $dst(x, y) = \left\{\begin{array}{rcl}maxval&{if src(x, y)>thresh}\\0 & {otherwise} \end{array}\right.$ |
+| THRESH_BINARY_INV | $dst(x, y) = \left\{\begin{array}{rcl}0 & {if src(x, y)>thresh}\\maxval & {otherwise} \end{array}\right.$ |
+| THRESH_TRUNC | $dst(x, y) = \left\{\begin{array}{rcl}threshold & {if src(x, y)>thresh}\\src(x, y) & {otherwise} \end{array}\right.$ |
+| THRESH_TOZERO | $dst(x, y) = \left\{\begin{array}{rcl}src(x, y) & {if src(x, y)>thresh}\\0 & {otherwise} \end{array}\right.$ |
+| THRESH_TOZERO_INV | $dst(x, y) = \left\{\begin{array}{rcl}0 & {if src(x, y)>thresh}\\src(x, y) & {otherwise} \end{array}\right.$ |
+
+```python
+img = cv.imread('path')
+
+gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+thresh, new_img = cv.threshold(hray, 127, 255, cv.THRESH_BINARY)
+```
+
+- 注意：
+	- **threshold会返回两个值，第一个值是阈值，第二个值是处理后的图片**
+
+#### 自适应阈值二值化
+
+> 当同一幅图像上的不同部分具有不同亮度的时候，我们需要采取自适应阈值。**此时的阈值是根据图像上的每一个小区域计算与其对于那个的阈值**
+
+- adaptiveThreshold(src, maxValue, adaptiveMethod, thresholdType, blockSize, C, dst=None)
+	- **该函数的返回值只有一个**
+	- Adaptive Method：指定计算阀值的方法
+		- ADAPTIVE_THRESH_MEAN_C：阀值取自相邻区域的平均值
+		- ADAPTIVE_THRESH_GAUSSIAN_C：阀值取自相邻区域的加权值，权重为一个高斯窗口
+	- Block Size：领域大小(用来计算阈值的区域大小)
+	- C：这就是一个常数，阈值就等于平均值或者加权平均值减去这个常数
+
+```python
+img = cv.imread('path')
+
+gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+new_img = cv.adaptiveThreshold(img, 255, cv.ADPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 3, 0)
+```
+
+- 注意：
+	- 自适应阀值也是最好使用灰度图
+	- blockSize的参数是一个值
