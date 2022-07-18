@@ -1309,3 +1309,246 @@ new_img = cv.adaptiveThreshold(img, 255, cv.ADPTIVE_THRESH_GAUSSIAN_C, cv.THRESH
 - 注意：
 	- 自适应阀值也是最好使用灰度图
 	- blockSize的参数是一个值
+
+#### 腐蚀
+
+> 腐蚀操作也是用卷积核扫描图像，只不过**腐蚀操作的卷积核一般都是1**，如果卷积核所有的像素点都是白色，那么锚点也是白色
+
+- erode(src, kernel, dst[, anchor[, iterations[, borderType[, borderValue]]]])
+	- iteration：腐蚀操作的迭代次数，次数越多，腐蚀操作执行的次数越多，效果越明显
+
+```python
+img = imread('path')
+
+kernel = np.ones((3, 3), np.uint8)
+
+cv.erode(img, kernel, iteration = 1)
+```
+
+#### 获取形态学卷积核
+
+- getStructElement(shape, ksize[, anchor])
+	- shape：卷积核的形状，**注意不适长宽，而是指卷积核中1形成的形状
+		- MORPH_RECT：卷积核中的1是矩形，常用
+		- MORPH_ELLIPSE：椭圆
+		- MORPH_CROSS：十字
+
+```python
+img = cv.imread('path')
+
+kernel = getStructElement(cv.MORPH_RECT, (9, 9))
+
+cv.erode(img, kernel, iterations = 1)
+```
+
+#### 膨胀操作
+
+> 膨胀是腐蚀的反操作，**基本原理是只要保存卷积核的锚点是非零值，周边无论是0还是非零，都会变成非零**
+
+- dilate(img, kernel, iteration = 1)
+	- kernel也可以用getsStructElement
+
+```
+img = cv.imread('path')
+
+kernel = getStructElement(cv.MORPH_RECT, (9, 9))
+
+cv.dilate(img, kernel, iterations = 1)
+```
+
+#### 开运算
+
+> 开运算和闭运算都是腐蚀和膨胀的基本应用
+> **开运算 = 腐蚀 + 膨胀**
+
+- morphologyEx(img, MORPH_OPEN, kernel)
+	- MORPH_OPEN表示形态学的开运算
+	- **kernel如果噪点比较多，那么建议选择大一点的kernel,反之，则选择较小的**
+
+```python
+img = cv.imread('path')
+
+kernel = getStructElement(cv.MORPH_RECT, (9, 9))
+
+cv.morphologyEx(img, cv.MOPRH_OPEN, kernel)
+```
+
+#### 闭运算
+
+> **闭运算= 膨胀 + 腐蚀**
+
+```python
+img = cv.imread('path')
+
+kernel = getStructElement(cv.MORPH_RECT, (9, 9))
+
+cv.morphologyEx(img, cv.MORPH_CLOSE, kernel)
+```
+
+#### 形态学梯度
+
+- **梯度 = 原图 - 腐蚀**
+- 腐蚀之后原图边缘变小了，原图- 腐蚀可以得到被腐蚀的部分，即边缘
+
+```python
+img = cv.imread('path')
+
+kernel = getStructElement(cv.MORPH_RECT, (9, 9))
+
+cv.morphologyEx(img, cv.MORPH_GRADIENT, kernel)
+```
+
+#### 顶帽操作
+
+- **顶帽 = 原图 - 开运算**
+- **开运算的效果是去除掉图像外的噪点，原图 - 开运算就得到了去除之后的噪点**
+
+```python
+img = cv.imread('path')
+
+kernel = getStructElement(cv.MORPH_RECT, (9, 9))
+
+cv.morphologyEx(img, cv.MORPH_TOPHAT, kernel)
+```
+
+#### 黑帽操作
+
+- 黑帽 = 原图 - 闭运算
+- **闭运算的效果是去除掉图像内的噪点，原图 - 闭运算就得到了去除之后的噪点**
+
+```python
+img = cv.imread('path')
+
+kernel = getStructElement(cv.MORPH_RECT, (9, 9))
+
+cv.morphologyEx(img, cv.MORPH_BLACKHAT, kernel)
+```
+
+### 图像轮廓
+
+#### 什么是图像轮廓
+
+> 图像轮廓就是**具有相同的颜色或灰度的连续点的曲线**，轮廓在形状分析的时候非常有用
+>> 用于图形分析
+>> 物体识别的分析
+
+- 注意：
+	- **为了检测轮廓的准确性，首先要对图像进行二值化或者Canny操作**
+	- 画轮廓的时候会修改输入的图像，如果之后向继续使用原始图像，首先要对原始图像进行保存
+
+#### 查找轮廓
+
+- findContours(image, mode, method[, contours[, hierachy[, offset]]])
+	- mode：查找轮廓的样式
+		- RETR_EXTERNAL = 0 只检查外围轮廓
+		- RETR_LIST = 1 检测的轮廓不建立等级关系，即检测所有轮廓，比较常用
+		- RETR_CCOMP = 2 每层最多两级，从里到外
+		- RETR_TREE = 3 按照树形存储轮廓，从大到小，从右到左，最常用
+	- method：
+		- CHAIN_APPROX_NONE 保存轮廓上的所有点
+		- CHAIN_APPROX_SIMPLE 只保存角点，比如四边形，只保留四边形的四个点，存储信息少，比较常用
+	- hierachy和contours
+		- 返回轮廓的层级和轮廓
+		- contours是一个列表
+
+```python
+img = cv.imread('path')
+
+gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+thresh, binary_img = cv.threshold(gray, 150, 255, cb.THRESH_BINARY)
+
+contours, hierachy = cv.findContours(img, cv.RETER_TREE, cv.CHAIN_APPROX_SIMPLE)
+```
+
+#### 绘制轮廓
+
+- drawContours(image, contours, contouridx, color[, thickness[, lineType[, hierarchy[, maxLevel]]]])
+	- contours：轮廓点
+	- contouridx：要绘制轮廓的编号，**-1表示所有轮廓**
+	- color：轮廓的颜色。
+	- thickness：线宽，**-1表示全部填充**
+
+```
+img_copy = img
+cv.draw(img_copy, contours, -1, (0, 0, 255), 2)
+```
+
+#### 轮廓的面积和周长
+
+> 轮廓面积是指每个轮廓中的像素点围成区域的面积，单位为像素
+> > 轮廓面积是轮廓的重要统计信息之一，通过轮廓面积的大小可以进一步的分析每个轮廓隐含的信息
+
+- contourArea(contours)
+- arcLength(curve, closed)
+	- curve：轮廓
+	- closed：是否是闭合的轮廓
+
+```python
+area = cv.contourArea(contours[1])
+length = cv.arcLength(contours[1], closed = True)
+```
+
+#### 多边形逼近
+
+> **findContours后的轮廓信息contours可能过于复杂不平滑，可用approxPolyDP函数对该多边形曲线做适当近似**，这就是多边形逼近
+
+- DP算法**核心就是不断找多边形最远点加入形成新的多边形，知道最短距离小于指定的精度**
+
+- approxPolyDP(curve, epsilion, closed, approxCurve)
+	- curve：要近似逼近的轮廓
+	- epsilion：即DP算法使用的阈值
+	- closed：轮廓是否闭合
+
+```
+approx = cv.approxPolyDP(contours[0], 20, True)
+cv.drawContours(img_copy, [approx], -1, (0, 255, 0), 2)
+```
+
+- 注意：
+	- 逼近的返回值是一个矩阵，因此画图时需要进行处理
+
+#### 多边形凸包
+
+> 多边形逼近只是轮廓的高度近似。**凸包跟逼近很像，但是凸包是物体最外层的凸多边形。凸包指的是完全包含原有轮廓，并且仅由轮廓上的点所构成的多边形。凸包的每一处都是凸的，即在凸包内连接任意亮点的直线都在凸包的内部。在凸包内，任意连续的三个点的内角和小于180**
+
+- convexHull(points[, hull[, clockwise[, returnPoints]]])
+	- points：轮廓
+	- clockwise：顺时针绘制
+
+```python
+hull = cv.convexHull(contours[0])
+cv.drawContours(img_copy, [hull], -1, (0, 255, 0), 2)
+```
+
+- 注意
+	-  凸包的返回值是一个矩阵，因此画图时需要进行处理
+
+#### 最小外接矩形
+
+- minAreaRet(points)
+	- 注意：
+		- 返回值是一个元组，内容是一个旋转矩形(RotatedRect)的参数，矩形的起始坐标x,y.矩形的宽度和高度，矩形的旋转角度
+
+```python
+ret = cv.minAreaRet(contours[0])
+```
+
+- **可以使用boxPoint来自动计算返回值**
+	- 但是注意，**最后使用drawContours的时候，坐标必须是整数，因此，需要取整**
+
+```python
+box = cv.boxPoint(ret)
+box = np.rount(box).astype('int64')
+```
+
+#### 最大外接矩形
+
+- boundingRet(points)
+	- 返回值直接是x,y和w,h
+
+```python
+x, y, w, h = cv.boundingRet(sontours[0])
+cv.rectangle(img, (x, y), (x + w, y + h), 2)
+```
+
