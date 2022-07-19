@@ -1552,3 +1552,201 @@ x, y, w, h = cv.boundingRet(sontours[0])
 cv.rectangle(img, (x, y), (x + w, y + h), 2)
 ```
 
+### 图像金字塔
+
+#### 图像金字塔介绍
+
+> **图像金字塔是图像中多尺度的一种表达，最主要用于图像的分割，是一种以多分辨率来解释图像的有效但概念简单的结构**。
+>> 简单来说，图像金字塔是同一图像不同分辨率子图的集合
+>
+>图像金字塔最初用于机器视觉和图像压缩，一幅图像的金字塔是一系列以金字塔形状排列的**分辨率逐步降低**且来源于**同一原始图像**的集合
+
+- 金字塔的底部是待处理图像的高分辨率表示，而顶部是低分辨率的近似。**层级越高，图像越小，分辨率越低**
+
+![[Pasted image 20220719134952.png]]
+
+- 常见的两类图像金字塔
+	- 高斯金字塔
+	- > 用来向下/降(分辨率减少)采样，主要的图像金字塔
+	- 拉普拉斯金字塔
+	- > 用来从金字塔底层图像重建上层未采样图像，在数字图像处理中也即是预测残差，可以对图像进行最大程度的还原，配合高斯金字塔一起使用
+
+#### 高斯金字塔
+
+> 高斯金字塔是通过高斯平滑和亚采样获得一系列下采样图像
+
+- 将$G_i$和高斯内核卷积
+- 将所有的偶数行和列去除
+- 每次处理后，图像是原来的1/4
+
+![[Pasted image 20220719135902.png]]
+
+- 注意：
+	- 向下采样会丢失图像信息
+
+- pyrDown(src)
+	- 下采样，分辨率减小的操作
+
+```python
+cv.pyrDown(img)
+```
+
+- 向上采样
+	- 将图像在每个方向扩大为原来的两倍，新增的行和列以0填充
+	- 使用先前同样的内核(乘以4)与放大后的图像卷积，获得近似值
+
+- pyrUp(src)
+
+```python
+cv.pyrUp(img)
+```
+
+- 注意：
+	- 高斯金字塔采样**过程不可逆**
+
+#### 拉普拉斯金字塔
+
+$$
+	L_i = G_i - PyrUp(PyrDown(G_i))
+$$
+
+- G是原始图像
+- L是拉普拉斯金字塔图像
+
+- 拉普拉斯金字塔就是通过原图像减去先缩小后放大的图像的一系列图像构成的，保留的是残差
+- **拉普拉斯金字塔图像只像图像边缘，用于图像压缩**
+
+![[Pasted image 20220719141440.png]]
+
+```python
+img = cv.imread('path')
+
+lap = img - cv.pyrUp(cv.pyrDown(img))
+```
+
+### 图像直方图
+
+#### 图像直方图的基本概念
+
+> 在统计学中，直方图是一种对数据分布情况的图形表示，是一种二维的统计图表
+> 图像直方图是表示数字图像中亮度分布的直方图，标绘了图像中每个亮度值的像素数。**这种直方图中，横坐标的左侧为纯黑、较暗的区域，而右侧为较亮、纯白的区域**。因此，一张较暗图片的图像直方图中数据多集中于左侧和中间部分，而整体明亮、只有少量阴影的图像则相反
+
+- 横坐标：图像中各个像素点的灰度级
+- 纵坐标：具有该灰度级的像素个数
+
+![[Pasted image 20220719142539.png]]
+
+#### 绘制直方图API
+
+- calcHist(images, channels, mask, histSize, ranges[, hist[, accumulate]])
+	- images：原始图像
+		- **需要中括号括起来**
+	- channels：指定通道
+		- **需要用中括号括起来，**
+		- 灰度图是[0]
+		- 彩色的BGR分别是[0], [1], [2]
+	- mask：掩码图像
+		- 统计整幅图像的直方图，设为None
+		- 统计图像的某一部分直方图时，需要掩码图像
+	- histSize：bins的数量，也就是X轴的数量
+		- **需要用中括号括起来，例如[250]**
+	- ranges：像素值的范围，例如[0, 255]
+	- accumulate：累积标识
+		- 默认值为False
+		- 如果被设置为True,则直方图在开始分配时不会清零
+		- **该参数允许从多个对象中计算单个直方图，或者用于实时更新直方图**
+		- 多个直方图的累积结果，用于对一组图像计算直方图
+
+```python
+cv.imread('path')
+
+cv.calcHist([img], [0], None, [256], [0, 255])
+```
+
+#### 绘制直方图
+
+- 使用matplotlib
+
+```python
+img = cv.imread('path')
+
+gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+# plt.hist(gray)
+plt.hist(gray,ravel(), bins = 256, ranges = [0, 255])
+```
+
+- 使用opencv
+
+```python
+img = cv.imread('path')
+
+histb = cv.calcHist([img], [0], None, [256], [0, 255])
+histg = cv.calcHist([img], [1], None, [256], [0, 255])
+histr = cv.calcHist([img], [2], None, [256], [0, 255])
+
+plt.plot(histb, color = 'b', label='bule')
+plt.plot(histg, color = 'g', label='green')
+plt.plot(histr, color = 'r', label='red')
+plt.legend()
+plt.show()
+```
+
+#### 使用掩膜的直方图
+
+- 如何生成掩膜
+	- 先生成一个全黑的和原始图片大小一样大的图片， **mask = np.zeros(img.shape, np.uint8)**
+	- 将想要得到的区域通过索引方式设置为255没**mask[100:200, 200:300] = 255**
+
+```python
+img = cv.imread('path')
+
+gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+mask = np.zeros(gray.shape, np.uint8)
+
+mask[200:400, 200:400] = 255
+
+# mask_gray = cv.bitwise_and(gray, gray, mask = mask)
+
+hist_mask = cv.calcHist([img], [0], mask, [256], [0, 255])
+
+
+plt.plot(hist_mask, label='mask')
+```
+
+#### 直方图均衡化原理
+
+> 直方图均衡化是通过拉伸像素强度的分布范围，使得在0～255灰阶上的分布更加均匀，提高了图像的对比度，到达改善图像主观视觉的效果。**对比较低的图像适合用均衡化**
+
+- 原理：
+	- 先得到归一化直方图
+	- 再计算累积直方图
+	- 将累积直方图进行区间转化
+	- 在累积直方图中，概率相近的原始值会被处理成相同的值
+
+- equalizeHist(src[, dst])
+	- src：原始图像
+	- dst：目标图像，即处理结果
+
+```python
+img = cv.imread('path')
+gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+gray_dark = gray - 40
+gray_bright = gray + 40
+
+hist_gray = cv.calcHist([gray], [0], None, [256], [0, 255])
+hist_dark = cv.calcHist([gray_dark], [0], None, [256], [0, 255])
+hist_bright = cv.calcHist([gray_bright], [0], None, [256], [0, 255])
+
+plt.plot(hist_gray)
+plt.plot(hist_dark)
+plt.plot(hist_bright)
+
+dark_equ = cv.equalizeHist(gray_dark)
+bright_equ = cv.equalizeHist(gray_bright)
+
+cv.imshow('gray_dark', np.hstack((gray_dark, dark_equ)))
+cv.imshow('gray_bright', np.hstack((gray_bright, bright_equ)))
+```
