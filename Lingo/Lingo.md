@@ -323,3 +323,347 @@ X( 6, 6)        27.00000            0.000000
 X( 6, 7)        3.000000            0.000000
 X( 6, 8)        0.000000            3.000000
 ```
+
+## Lingo运算符
+
+### 算数运算符
+
+- 略
+
+### 关系运算符
+
+- 关系运算符往往用在约束条件中，用来指定约束条件左右量两边必须满足的关系
+- Lingo只有三种关系运算符 **"=".">=","<="**
+	- 没有单独的大于，小于，若出现**直接视为Lingo省略了等于号**
+- 若想**严格大于或小于**：
+
+```lingo
+B = 10;
+e = 0.000001;
+A - e > B;
+```
+
+- 使用一个可以无限小的e来说明，A是严格大于B的，**其中，e的小数位数由需要的精度确定**
+
+### 逻辑运算符
+
+| 分类 | 运算符 | 理解 | 作用 |
+| --- | --- | --- | --- |
+| | # eq # | equal | 两个运算对象相等为真 |
+| | # ne # | not equal | 两个运算对象不等为真 |
+ |两个数字 | # gt # | greater than | 大于为真 | 
+ | 之间 | # ge # | greater equal | 大于等于为真 |
+ | | # lt # | less than | 小于为真 |
+ | | # le # | less equal | 小于等于为真 |
+ | | # not # | 非门 | 单目运算符，取反操作 |
+ | 逻辑 | # and # | 与门 | 与操作 |
+ | | # or # | 或门 | 或操作 |
+
+- 逻辑运算唯一出现的位置
+	- for循环和sum求和
+	- if判断中
+
+#### 案例1
+
+> 若矩阵a = [6, 5, 4, 3, 2, 1]，用集合的语言求解a(5) + a(6)
+
+```lingo
+model:
+	sets:
+		factory /1..6/: a;
+	endsets
+
+	data:
+		a = 6, 5, 4, 3, 2, 1;
+	enddata
+
+	y = @sum(factory(i) | i #ge# 5 : a(i));
+end
+
+! 结果为:
+Variable      Value
+ Y            3.000000
+ A( 1)        6.000000
+ A( 2)        5.000000
+ A( 3)        4.000000
+ A( 4)        3.000000
+ A( 5)        2.000000
+ A( 6)        1.000000
+```
+
+- 注意：
+	- 在@sum或者@for中，使用逻辑运算，需要在time后面跟上 |
+
+#### 案例2
+
+> 若矩阵a由留个元素组成，且a(i) > 5, i = 1, 2, 5, 6。求矩阵a个元素求和的最小值
+
+```lingo
+model:
+	sets:
+		fac /1..6/: a;
+	endsets
+
+	min = @sum(fac(i) : a(i));
+	@for (fac(i) | i #ne# 3 #and# i #ne# 4: a(i) > 5);
+end
+
+! 结果为:
+Objective value:                  20.00000
+
+Variable      Value               Reduced Cost
+ A( 1)        5.000000            0.000000
+ A( 2)        5.000000            0.000000
+ A( 3)        0.000000            1.000000
+ A( 4)        0.000000            1.000000
+ A( 5)        5.000000            0.000000
+ A( 6)        5.000000            0.000000
+```
+
+#### 案例3
+
+> 若矩阵 $a = \begin{bmatrix}1 & 2 & 3 \\ 4 & 5 & 6 \\ 7 & 8 & 9 \end{bmatrix}$，求矩阵上三角之和(含对角线)
+
+```lingo
+model:
+	sets:
+		fac /1..3/: ;
+		coo(fac, fac): a;
+	endsets
+
+	data:
+		a = 1, 2, 3
+			4, 5, 6
+			7, 8, 9;
+	enddata
+
+	y = @sum (coo(i, j) | i #le# j : a(i, j));
+end
+
+! 结果为:
+ Variable           Value
+ Y               26.00000
+ A( 1, 1)        1.000000
+ A( 1, 2)        2.000000
+ A( 1, 3)        3.000000
+ A( 2, 1)        4.000000
+ A( 2, 2)        5.000000
+ A( 2, 3)        6.000000
+ A( 3, 1)        7.000000
+ A( 3, 2)        8.000000
+ A( 3, 3)        9.000000
+
+```
+
+
+## 函数表
+
+| 函数 | 用法 | 参数 | 
+| --- | --- | --- | 
+| @for | @for(time [\| logic] : expressin) | time：遍历的次数，logic：逻辑表达式，expression：需要循环的表达式 |
+| @sum | @sum(time [\| logic] : expressin) | 同上 |
+| @if | @if(logic , true , false) | 如果logic为真，则if返回true位置上的值，反之则返回false |
+| @free | @free(var) | 使var的作用域变为R | 
+| @bin | @bin(var) | 限制var只能取0或1，在0-1规划中特别有用 |
+| @gin | @gin(var) | 限制var为整数，在整数规划中特别有用 |
+| @bnd | @bnd(a, var, b) | 限制 $a \leq var \leq b$，推荐直接替换两个约束条件 |
+| @sin | @sin(var) | 返回var的正弦值 |
+| @cos | @cos(var) | 返回var的余弦值 | 
+| @tan | @tan(var) | 返回var的正切值 |
+| @log | @log(var) | 返回x的自然对数值，其他底数用换地公式 |
+| @exp | @exp(var) | 返回$e^x$的值 |
+| @abs | @abs(var) | 返回x的绝对值 |
+| @sigh | @sigh(var) | 返回x的符号值，若$x\geq 0$为1，反之为-1 |
+| @floor | @floor(var) | 返回x的整数部分，向靠近0的方向取整 |
+| @smax | @smax(var1, ..., varN) | 返回其中的最大值 |
+| @smin | @smin(var1, ..., varN) | 返回其中的最小值 |
+| @prod | @prod(time [\| logic] : expressin) | 求积 |
+| @max | @max(time [\| logic] : expressin) | 求最大值 |
+| @min | @min(time [\| logic] : expressin) | 求最小值 |
+| @in | @in(factory, elem) | 判断elem是否在集合(矩阵)中 |
+| @size | @size(factory) | 返回矩阵长度 | 
+
+
+- 注意：
+	- 可选参数使用[]括起来
+
+### if案例1
+
+> 用Lingo表达出分段函数 $y = \left\{\begin{matrix}x + 10 & {x \geq 0} \\ x - 10 & {x \lt 0} \end{matrix}\right.$，并求出x为一系列数值时的结果
+
+```lingo
+model:
+	@free(x);
+	@free(y);
+	y = @if (x #ge# 0, x + 10, x - 10);
+end
+```
+
+### if案例2
+
+> 用Lingo表达出分段函数 $y = \left\{\begin{matrix}4x & {0 \leq x \leq 500} \\500 + 3x & {500 \lt x \leq 1000} \\1500 + 2x & {x \gt 1000} \end{matrix}\right.$
+
+```lingo
+model:
+	y = @if (x #le# 500, 4*x, @if(x #gt# 1000, 1500 + 2*x, 500 + 3*x));
+end
+```
+
+### free案例
+
+> 求函数 $z = (x + 2)^2 + (y - 2)^2$的最小值
+
+```lingo
+model:
+	@free(X);
+	@free(y);
+
+	min = (x + 2)^2 + (y - 2)^2;
+end
+
+! 结果为:
+Objective value:             0.000000
+
+Variable     Value           Reduced Cost
+ X          -2.000000        0.000000
+ Y           2.000000        0.000000
+```
+
+### bnd案例
+
+> 求函数 $y = 2x$在(1, 3)之间的最大值
+
+```lingo
+model:
+	@bnd(1, x, 3);
+	max = 2 * x;
+end
+
+! 结果为:
+Objective value:            6.000000
+
+Variable     Value          Reduced Cost
+X            3.000000       -2.000000
+```
+
+### bin案例
+
+> 已知a = [2, 9, 3, 8, 10, 6, 4, 10] 以及 b = [1, 3, 4, 3, 3, 1, 5, 10]，求以下线性规划
+
+$max = \sum_{i=1}^8{a_ix_i}$
+
+$$
+	s.t.
+	\left\{\begin{matrix}
+	\sum_{i=1}^8{b_ix_i} \leq 15 \\\
+	x_i = 1 \ or \ 0 & {i = 1,2,...,n} 
+	\end{matrix}\right.
+$$
+
+```lingo
+model:
+	sets:
+		fac /1..8/: a, b, x;
+	endsets
+
+	data:
+		a = 2, 9, 3, 8, 10, 6, 4, 10;
+		b = 1, 3, 4, 3, 3, 1, 5, 10;
+	enddata
+
+	max = @sum (fac(i) : a(i) * x(i));
+	@sum (fac(i) : b(i) * x(i)) <= 15;
+	@for (fac(i) : @bin(x(i)));
+end
+
+! 结果为:
+Objective value:                38.00000
+Objective bound:                38.00000
+  
+Variable           Value        Reduced Cost
+X( 1)        1.000000           -2.000000
+X( 2)        1.000000           -9.000000
+X( 3)        1.000000           -3.000000
+X( 4)        1.000000           -8.000000
+X( 5)        1.000000           -10.00000
+X( 6)        1.000000           -6.000000
+X( 7)        0.000000           -4.000000
+X( 8)        0.000000           -10.00000
+```
+
+### gin案例
+
+> 已知a = [2.1, 1.0, 1.8, 1.2, 2.0, 1.2] 以及 b = [6, 125, 12500, 345, 5]，求整数规划
+
+$max = \sum_{i=1}^6{a_ix_i}$
+
+$$
+	s.t.
+	\left\{\begin{matrix}
+	\sum_{i=1}^6{c_{ij}x_i} \leq b_j & {j = 1,2,..,5} \\\
+	\sum_{i=1}^6{x_i} = 14 \\\
+	x_2 \leq 3, x_4 \leq 2 \\\
+	1 \leq x_i \leq 4 & {i = 1,3,5,6}
+	\end{matrix}\right.
+$$ $$
+	c = 
+	\begin{bmatrix}
+	0.45 & 20 & 415 & 22 & 0.3 \\
+	0.45 & 28 & 4065 & 5 & 0.35 \\
+	0.65 & 40 & 850 & 43 & 0.6 \\
+	0.4 & 25 & 75 & 27 & 0.2 \\
+	0.5 & 26 & 76 & 48 & 0.4 \\
+	0.5 & 75 & 235 & 8 & 0.6
+	\end{bmatrix}
+$$
+
+```lingo
+model:
+	sets:
+		factory /1..6/ : a, x;
+		plant /1..5/ : b;
+		coo(factory, plant): c;
+	endsets
+	
+	data:
+		a = 2.1, 1.0, 1.8, 1.2, 2.0, 1.2;
+		b = 6, 125, 12500, 345, 5;
+		c = 0.45, 20, 415, 22, 0.3
+			0.45, 28, 4065, 5, 0.35
+			0.65, 40, 850, 43, 0.6
+			0.4, 25, 75, 27, 0.2
+			0.5, 26, 76, 48, 0.4
+			0.5, 75, 235, 8, 0.6;
+	enddata
+
+	max = @sum (factory : a * x);
+	@for (plant(j) : @sum (factory(i) : c(i, j) * x(i)) <= b(j));
+	@sum (factory : x) = 14;
+	x(2) <= 3;
+	x(4) <= 2;
+	!
+	@for (factory(i) | i #ne# 2 #and# i #ne# 4 : x(i) <= 4)
+	@for (factory(i) | i #ne# 2 #and# i #ne# 4 : x(i) >= 1);
+	@for (factory(i) | i #ne# 2 #and# i #ne# 4 : @bnd(1, x(i), 4));
+	@for (factory : @gin(x));
+end
+
+! 结果为:
+No feasible solution found
+A solution is not available for this model
+```
+
+### 数学求解
+
+> 求解$sin(3.14159) + log_2^{1024} + |-10| + e^0$
+
+```lingo
+y = @sin(3.14159) + @log(1024) / @log(2) + @abs(-10) + @exp(0);
+
+! 结果为:
+Variable    Value
+ Y          21.00000
+```
+
+
+
