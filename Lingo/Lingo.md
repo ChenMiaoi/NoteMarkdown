@@ -482,6 +482,9 @@ end
 | @min | @min(time [\| logic] : expressin) | 求最小值 |
 | @in | @in(factory, elem) | 判断elem是否在集合(矩阵)中 |
 | @size | @size(factory) | 返回矩阵长度 | 
+| @file | @file(fileName) | 读取txt文件，每调用一次，读取一次，直到遇到~为止 |
+| @ole | @ole(fileName) | 读取Excel文件 |
+| @text | @text(fileName) | 输出到Excel文件 | 
 
 
 - 注意：
@@ -665,5 +668,201 @@ Variable    Value
  Y          21.00000
 ```
 
+### file案例
 
+```txt
+! new 3.3.txt
+!仓库点;
+WH1 WH2 WH3 WH4 WH5 WH6 ~
 
+!客户成员;
+V1 V2 V3 V4 V5 V6 V7 V8 ~
+
+!库存量;
+60 55 51 43 41 52 ~
+ 
+!客户需求量;
+35 37 22 32 41 32 43 38 ~
+
+!单位运输费用矩阵;
+6 2 6 7 4 2 5 9
+4 9 5 3 8 5 8 2
+5 2 1 9 7 4 3 3
+7 6 7 3 9 2 7 1
+2 3 9 5 7 2 6 5
+5 5 2 2 8 1 4 3
+```
+
+- 注意：
+	- @file是每次读取到~号结束
+
+```lingo
+model:
+	sets:
+		fac /@file('new 3.3.txt')/: a;
+		plant /@file('new 3.3.txt')/: d;
+		coo(fac, plant): c, x;
+	endsets
+
+	data:
+		a = @file('new 3.3.txt');
+		d = @file('new 3.3.txt');
+		c = @file('new 3.3.txt');
+	enddata
+	
+	min = @sum(coo(i, j) : c(i, j) * x(i, j));
+	@for (fac(i) : @sum (plant(j) : x(i, j)) <= a(i));
+	@for (plant(j) : @sum(fac(i) : x(i, j)) = d(j));
+end
+
+! 结果为:
+Objective value:                       664.0000
+
+Variable           Value               Reduced Cost
+X( WH1, V1)        0.000000            5.000000
+X( WH1, V2)        19.00000            0.000000
+X( WH1, V3)        0.000000            5.000000
+X( WH1, V4)        0.000000            7.000000
+X( WH1, V5)        41.00000            0.000000
+X( WH1, V6)        0.000000            2.000000
+X( WH1, V7)        0.000000            2.000000
+X( WH1, V8)        0.000000            10.00000
+X( WH2, V1)        1.000000            0.000000
+X( WH2, V2)        0.000000            4.000000
+X( WH2, V3)        0.000000            1.000000
+X( WH2, V4)        32.00000            0.000000
+X( WH2, V5)        0.000000            1.000000
+X( WH2, V6)        0.000000            2.000000
+X( WH2, V7)        0.000000            2.000000
+X( WH2, V8)        0.000000            0.000000
+X( WH3, V1)        0.000000            4.000000
+X( WH3, V2)        11.00000            0.000000
+X( WH3, V3)        0.000000            0.000000
+X( WH3, V4)        0.000000            9.000000
+X( WH3, V5)        0.000000            3.000000
+X( WH3, V6)        0.000000            4.000000
+X( WH3, V7)        40.00000            0.000000
+X( WH3, V8)        0.000000            4.000000
+X( WH4, V1)        0.000000            4.000000
+X( WH4, V2)        0.000000            2.000000
+X( WH4, V3)        0.000000            4.000000
+X( WH4, V4)        0.000000            1.000000
+X( WH4, V5)        0.000000            3.000000
+X( WH4, V6)        5.000000            0.000000
+X( WH4, V7)        0.000000            2.000000
+X( WH4, V8)        38.00000            0.000000
+X( WH5, V1)        34.00000            0.000000
+X( WH5, V2)        7.000000            0.000000
+X( WH5, V3)        0.000000            7.000000
+X( WH5, V4)        0.000000            4.000000
+X( WH5, V5)        0.000000            2.000000
+X( WH5, V6)        0.000000            1.000000
+X( WH5, V7)        0.000000            2.000000
+X( WH5, V8)        0.000000            5.000000
+X( WH6, V1)        0.000000            3.000000
+X( WH6, V2)        0.000000            2.000000
+X( WH6, V3)        22.00000            0.000000
+X( WH6, V4)        0.000000            1.000000
+X( WH6, V5)        0.000000            3.000000
+X( WH6, V6)        27.00000            0.000000
+X( WH6, V7)        3.000000            0.000000
+X( WH6, V8)        0.000000            3.000000
+```
+
+### ole案例
+
+```lingo
+model:
+	sets:
+		fac /1..6/: a;
+		plant /1..8/: d;
+		coo(fac, plant): wv, x;
+	endsets
+
+	data:
+		a, d, wv = @ole('运输模型 3.3.txt');
+	enddata
+	
+	min = @sum(coo(i, j) : wv(i, j) * x(i, j));
+	@for (fac(i) : @sum (plant(j) : x(i, j)) <= a(i));
+	@for (plant(j) : @sum(fac(i) : x(i, j)) = d(j));
+end
+```
+
+- 注意：
+	- 在使用@ole调用xlsx文件的时候，需要自行手动将需要的文件打开
+	- **因为Excel底层是C语言，因此变量名尽量的避开单个C字母**
+	- 在使用@ole时，**需要将excel表格中的名称自定义，否则Lingo无法找到变量**
+
+### text案例
+
+```lingo
+model:
+	sets:
+		fac /1..6/: a;
+		plant /1..8/: d;
+		coo(fac, plant): wv, x;
+	endsets
+
+	data:
+		a, d, wv = @ole('运输模型 3.3.txt');
+	enddata
+	
+	min = @sum(coo(i, j) : wv(i, j) * x(i, j));
+	@for (fac(i) : @sum (plant(j) : x(i, j)) <= a(i));
+	@for (plant(j) : @sum(fac(i) : x(i, j)) = d(j));
+
+	data:
+		@ole('result.xlsx') = x;
+	enddata
+end
+```
+
+- 注意：
+	- 在使用前，需要将Excel对应位置进行自定义命名，不然Lingo无法找到对应位置
+	- **同时，不需要将result.xlsx打开**
+
+## 稠密集合和稀疏集合
+
+![[Pasted image 20220813182035.png]]
+
+### 直接列举法
+
+- $x_{ik}$：表示任务$i(i=A,B,..,K)$分配给工作站$k(k=1,2,3,4)$的情况
+	- **特别的，$x_{ik}=1$表示分配，反之则不分配**
+- $t_i$：表示完成各项任务需要的所需时间
+- 目标函数：$min \ T = \mathop{max}\limits_{1 \leq k \leq 4}\sum_{i=1}^{11}{t_i · x_{ik}}$
+- 约束条件1：每项任务有且仅能分配一个工作站做，$\sum_{k=1}^4{x_{ik}}=1$
+- 约束条件2：**各项任务如果有优先级关系，则位于前面的任务 i 对应的工作站(序号)应小于(或等于)排在后面任务 j 所对应的工作站**，即$\sum_{k=1}^4({k·x_{jk} - k·x_{ik}}) \geq 0，if \ i \lt j$ 
+- 约束条件3：$x_{ij} = 0 \ or 1$
+- 这是一个非线性规划问题，但可以转化为线性规划问题，增加一个变量Z，再增加一个约束条件：$\sum_{i=1}^{11}{t_i·x_{ik}} \leq Z$
+- 目标函数：$min \ Z$
+
+```lingo
+model:
+	sets:
+		task /A, B, C, D, E, F, G, H, I, J, K/: t;
+		workStation /1..4/ ;
+		sort(task, task )/A,B, B,C, C,F, C,G, F,J, G,J, D,E, E,H, E,I, H,J, I,J/;
+		distri(task, workStation): x;
+	endsets
+
+	data:
+		t = 45, 11, 9, 50, 15, 12, 12, 12, 12, 8, 9;
+	enddata
+
+	!使之变为线性规划;
+	min = z;
+	@for (workStation(k) : @sum(task(i) : t(i) * x(i, k)) <= z);
+	!约束1;
+	@for (task(i) : @sum (workStation(k) : x(i, k)) = 1);
+	!约束2;
+	@for (sort(i, j) | (i #lt# j) : @sum (workStation(k) : k * x(j, k) - k * x(i, k)) >= 0);
+	!约束3;
+	@for (distri(i, j) : @bin(x(i, j)));
+
+	data:
+		@ole('result1.xlsx') = x;
+	enddata
+end
+```
