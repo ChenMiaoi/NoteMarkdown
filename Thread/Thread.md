@@ -55,11 +55,18 @@ public:
 	static void func3(){
 		std::cout << "func3 start" << std::endl;
 	}
+
+	void func4() {
+		std::cout << "func4 start" << std::endl;
+	}
 };
 
 int main(){
 	std::function<void()> func3 = Func3::func3;
 	std::thread t3(func3);
+
+	std::function<void()> func4 = std::bind(&Func3::func4, Func3());
+	std::thread t3(func4);
 	return 0;
 }
 ```
@@ -67,16 +74,17 @@ int main(){
 - 注意
 	- **如果function一个类函数，那么必须是类的静态成员函数**
 		- 个人见解：如果不是静态成员，**普通成员函数就算被function包装之后，依旧是指向成员函数的指针，而thread需要的是一个指向函数的指针**
+		- **其实归根结底，就是因为function包装之后也需要传入this指针，如果用bind讲this指针绑定就可以解决**
 
 ##### lambda
 
 ```cpp
-auto func4 = []{
+auto func5 = []{
 	std::cout << "func4 start" << std::endl;
 };
 
 int main(){
-	std::thread t4(func4);
+	std::thread t4(func5);
 	return 0;
 }
 ```
@@ -108,6 +116,10 @@ thread().detach();
 	- 相当于被C++接管，当子线程运行完成，由负责清理该线程相关的资源(守护线程)清理
 	- **一旦使用detach后，不能再次使用join**
 
+- 优化：
+	- 如果在线程创建开始的时候，传入的参数是内置类型，那么建议直接值传递，**值传递之后，thread会构建出另外一个变量，如果用引用传递，则会导致变量地址一致**，从而有可能因为主进程结束导致资源被清空引发错误
+	- 如果传递的是类(或自定义类)，需要避免隐式类型转换。因此在创建线程的时候，传入类的临时对象且调用函数中使用引用(**避免浪费**)来接受避免错误
+
 #### joinable
 
 > 判断是否可以成功使用join或detach
@@ -117,4 +129,59 @@ if (thread().joinable()){
 	//...
 }
 ```
+
+#### get_pid
+
+> 获取线程的pid
+
+```cpp
+thread().get_pid();
+```
+
+#### this_thread
+
+> 指向自身线程的类
+
+```
+std::this_thread
+```
+
+### 创建多个线程
+
+```cpp
+void myPrint(const int& i){  
+    std::cout << "thread -> " << i << " -> create success" << std::endl;  
+}  
+  
+int main(){  
+    std::vector<std::thread> mythread;  
+    for (int i = 0; i < 10; i++){  
+        mythread.emplace_back(thread(myPrint, i));  
+    }  
+    for (auto it = mythread.begin(); it != mythread.end(); it++){  
+        if (it->joinable()){  
+            it->join();  
+        }  
+    }  
+    return 0;  
+}
+```
+
+### 数据共享
+
+#### 只读数据
+
+> 只读数据是安全稳定的，不需要特别的处理手段
+
+#### 可读可写
+
+> 大概率会导致程序崩溃，因此需要特殊的处理
+
+#### 其他
+
+> 数据争抢问题，需要特殊处理
+
+## 互斥量
+
+> 保护共享数据，操作时，某个线程用代码把共享数据锁住、操作数据、解锁。**其他想操作共享数据的线程必须等待解锁、锁住、操作、解锁**
 
