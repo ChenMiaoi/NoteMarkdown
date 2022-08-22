@@ -1750,3 +1750,29 @@ bright_equ = cv.equalizeHist(gray_bright)
 cv.imshow('gray_dark', np.hstack((gray_dark, dark_equ)))
 cv.imshow('gray_bright', np.hstack((gray_bright, bright_equ)))
 ```
+
+### 汽车项目知识补充
+
+#### 背景减除
+
+- BackgroundSubtractorMOG()
+	- 这是一个**以高斯模型为基础的前景/背景分割算法**
+	- 使用K = 3或5个高斯分布混合对背景进行建模。
+	- **在使用之前，需要先使用bgsegm.createBackgroundSubtractorMOG创建一个背景对象，然后使用backgroundsubtractor.apply（）就可以得到前景的掩膜**
+	- **移动的物体会被标记为白色，背景会被标记为黑色**
+
+```python
+cap = cv.VideoCapture(0)
+
+mog = cv.bgsegm.createBackgroundSubstractorMOG()
+
+while True:
+	ret, frame = cap.read()
+	if ret = True:
+		fgmask = mog.apply(frame)
+		cv.imshow('video', fgmask)
+```
+
+- 注意：
+	- **新版本直接createBackgroundSubtractorMOG2，不需要在加入bgsemg**
+
