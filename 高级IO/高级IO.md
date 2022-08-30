@@ -295,6 +295,10 @@ namespace ns_select {
             continue;
           }
 
+          uint16_t peer_port = htons(peer.sin_port);
+          std::string peer_ip = inet_ntoa(peer.sin_addr);
+
+          std::cout << "get a new link" << peer_ip << " : " << peer_port << std::endl;
           //此时不允许进行对应的recv
           //需要将该文件描述符添加到fd_array数组中
           if (!AddFdToArray(fd_array, NUM, sock)) {
@@ -304,7 +308,20 @@ namespace ns_select {
         }else {
           if (FD_ISSET(fd_array[i], &rfds)) {
             //是一个合法的文件描述符，并且是读事件就绪
-            recv();
+            char buffer[NUM];
+            ssize_t s = recv(fd_array[i], buffer, sizeof(buffer) - 1, 0);
+            if (s > 0) {
+              buffer[s] = 0;
+              std::cout << "echo# " << buffer << std::endl;
+            }else if (s == 0) {
+              std::cout << "client quit" << std::endl;
+              close(fd_array[i]);
+              fd_array[i] = DEL_FD; // 清除数组中的文件描述符
+            }else {
+              std::cerr << "recv error" << std::endl;
+              close(fd_array[i]);
+              fd_array[i] = DEL_FD; // 清除数组中的文件描述符
+            }
           }else {
 
           }
@@ -333,7 +350,23 @@ namespace ns_select {
     unsigned short _port;
   };
 }
+
 #endif // !__SELECT_SERVER_H__
+
+```
+
+- 注意：
+	- 给定链接的时候，需要给每一个链接定义一个缓冲区(输入输出缓冲区)
+
+```c++
+struct buckets{
+	buckets() : _in_curr(0), _out_curr(0) {}
+	
+	std::string _inbuffer;
+	std::string _outbuffer;
+	int _in_curr;    //已经接收到了多少数据
+	int _out_curr;   //已经发送了多少数据
+};
 ```
 
 #### server.cc
@@ -361,3 +394,171 @@ int main(int argc, char* argv[]) {
 }
 ```
 
+### select的特征
+
+#### 缺点
+
+- **select能够同时等待的文件描述符是有上限的**
+- select需要和OS交互数据，涉及到较多数据的来回拷贝。当select面临的链接很多，就绪的数据也很多的时候，会因为数据拷贝而导致效率降低
+- select每次调用，都必须重新添加fd，一定会影响程序运行的效率，而且比较麻烦，容易出错
+- select(nfds ...)，max(fd) + 1：操作系统在检测fd就绪的时候，需要遍历的，所以当有大量的链接的时候，内核同步select底层遍历，成本会变得越来越高
+
+#### 优点
+
+- select可以同时多个fd，而且只负责等待，有具体的accept，recv，send来完成实际的IO操作，且不会被阻塞
+
+## Poll
+
+### poll原型
+
+```c
+int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+```
+
+#### struct pollfd
+
+```c
+struct pollfd {
+    int   fd;         /* file descriptor */
+    short events;     /* requested events */
+    short revents;    /* returned events */
+};
+```
+
+#### events
+
+```c
+POLLIN There is data to read.
+
+POLLPRI There  is  urgent data to read (e.g., out-of-band data on TCP socket; pseudoterminal master  in  packet  mode has seen state change in slave).
+
+POLLOUT Writing now will not block.
+
+POLLRDHUP (since Linux 2.6.17) Stream  socket  peer  closed  connection, or shut down writing half of connection.  The  _GNU_SOURCE  feature  test  macro  must  be  defined  (before  including any header files) in order to obtain this definition.
+
+POLLERR Error condition (output only).
+
+POLLHUP Hang up (output only).
+
+POLLNVAL Invalid request: fd not open (output only).
+```
+
+### poll & select
+
+- 解决了select能检测的文件描述符是有上限这一问题
+- 分离了用户 -> OS，OS -> 用户
+	- **不用在每次调用poll的时候，重新添加fd以及fd关心的事件**
+
+### Poll Code
+
+#### sock.hpp
+
+``` c++
+#ifndef __SOCK_H__
+#define __SOCK_H__
+
+#include <iostream>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <cstring>
+
+namespace ns_sock{
+  class Sock {
+  public:
+    static int Socket() {
+      int sock = socket(AF_INET, SOCK_STREAM, 0);
+      if (sock < 0) {
+        std::cerr << "socket error" << std::endl;
+        exit(1);
+      }
+      return sock;
+    }
+
+    static bool Bind(int sock, unsigned short port) {
+      struct sockaddr_in local;
+      memset(&local, 0, sizeof(0));
+      local.sin_family = AF_INET;
+      local.sin_port = htons(port);
+      local.sin_addr.s_addr = INADDR_ANY;
+
+      if (bind(sock, (struct sockaddr*)&local, sizeof(local)) < 0) {
+        std::cerr << "bind error" << std::endl;
+        exit(2);
+      }
+      return true;
+    }
+
+    static bool Listen(int sock, int backlog) {
+      if (listen(sock, backlog) < 0) {
+        std::cerr << "listen error" << std::endl;
+        exit(3);
+      }
+      return true;
+    }
+  };
+}
+#endif // !__SOCK_H__
+```
+
+#### poll.hpp
+
+```c++
+#include "sock.hpp"
+#include <poll.h>
+
+namespace ns_poll {
+  class PollServer {
+  public:
+    PollServer(int port) : _port(port) {}
+
+  public:
+    void InitServer() {
+      _listen_sock = ns_sock::Sock::Socket();
+      ns_sock::Sock::Bind(_listen_sock, _port);
+      ns_sock::Sock::Listen(_listen_sock, 5);
+    }
+
+    void Run() {
+      struct pollfd rfds[64];
+      for (int i = 0; i < 64; i++) {
+        rfds[i].fd = -1;
+        rfds[i].events = 0;
+        rfds[i].revents = 0;
+      }
+
+      rfds[0].fd = _listen_sock;
+      rfds[0].events |= POLLIN;
+      rfds[0].revents = 0;
+      for (; ;) {
+        switch(poll(rfds, 64, -1)) {
+        case 0:
+          std::cout << "timeout" << std::endl;
+          break;
+        case -1:
+          std::cerr << "poll error" << std::endl;
+          break;
+        default:
+          for (int i = 0; i < 64; i++) {
+            if (rfds[i].fd == -1) {
+              continue;
+            }
+            if (rfds[i].revents & POLLIN) {
+              //accept
+              std::cout << "get a new link..." << std::endl;
+            }else {
+              //recv
+            }
+          }     
+          break;
+        }
+      }
+    }
+  private:
+    int _listen_sock;
+    int _port;
+  };
+}
+```
