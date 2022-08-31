@@ -562,3 +562,117 @@ namespace ns_poll {
   };
 }
 ```
+
+## Epoll
+
+### epoll初识
+
+> 为处理大批量句柄而作了改进的poll
+
+- **公认为Linux2.6性能最好的多路I/O就绪通知方法**
+
+### epoll的相关系统调用
+
+> **epoll在底层采用的是回调机制，检测事件就绪的**
+
+#### epoll_create
+
+```c
+int epoll_create(int size);
+```
+
+- 创建一个epoll的句柄
+	- 自从Linux2.6.8之后，size参数是被忽略的
+	- **用完之后必须调用close()关闭**
+
+#### epoll_ctl
+
+```c
+int epoll_ctl(int epfd, int op, int fd, struct epoll_event* event);
+```
+
+- epoll的事件注册函数
+	- 不同于select实在监听事件时告诉内核要监听什么类型的事件，而是在这里先注册要监听的事件类型
+	- 第一个参数是epoll_create()的返回值(epoll的句柄)
+	- 第二个参数表示动作，用三个宏来表示
+		- EPOLL_CTL_ADD：注册新的fd到epfd中(往红黑树中新增节点)
+		- EPOLL_CTL_MOD：修改已经注册的fd的监听事件
+		- EPOLL_CTL_DEL：从epfd中删除一个fd
+	- 第三个参数是需要监听的fd
+	- 第四个参数是告诉内核需要监听什么事
+
+#### epoll_wait
+
+```c
+int epoll_wait(int epfd, struct epoll_event* events, int maxevents, int timeout);
+```
+
+- 收集在epoll监控的事件中已经发送的事件
+	- 参数events是分配号的epoll_event结构体数组
+	- epoll将会把事件赋值到event数组中(**event不可以是空指针，内核只负责把数据赋值到这个events数组中，不会去帮助我们在用户态中分配内存**)
+	- maxevent告知内核这个events有多大，这个maxevents的值不能大于创建epoll_create的size
+	- timeout是超时时间(毫秒，0会立即返回，-1是永久阻塞)
+	- 如果函数调用成功，返回对应I/O已准备好的文件描述符数目，若返回0表示已超时，返回小于0表示函数失败
+
+#### struct epoll_event
+
+```c
+typedef union epoll_data{
+	void* ptr;
+	int fd;
+	uint32_t u32;
+	uint64_t u64;
+}epoll_data_t;
+
+struct epoll_event {
+	uint32_t events;    //Epoll events
+	epoll_data_t data;  //User data variable
+};
+```
+
+#### events
+
+- EPOLLIN：表示对应的文件描述符可以读(包括对端SOCKET正常关闭)
+- EPOLLOUT：表示对应的文件描述符可以写
+- EPOLLPRI：表示对应的文件描述符有紧急的数据可读(**外带数据到来**)
+- EPOLLERR：表示对应的文件描述符发生错误
+- EPOLLHUP：表示对应的文件描述符被挂断
+- EPOLLET：将epoll设为边缘触发(Edge Triggered)模式，这是相对于水平出发(Level Triggered)来说的
+- EPOLLONESHOT：只监听一次事件，当监听完这次事件后，如果还需要继续监听这个socket的话，**需要重新再次把这个socket假如到epoll队列中**
+
+### epoll工作原理
+
+- 当某一进程调用epoll_create方法时， Linux内核会创建一个eventpoll结构体，这个结构体中有两个成员与epoll的使用方式密切相关
+- 每一个epoll对象都有一个独立的eventpoll结构体，用于存放通过epoll_ctl方法向epoll对象中添加进来的事件
+- 这些事件都会挂载在红黑树中，如此，重复添加的事件就可以通过红黑树而高效的识别出来(红黑树的插入时间效率是lgn，其中n为树的高度)
+- 而所有添加到epoll中的事件都会与设备(网卡)驱动程序建立回调关系，也就是说，当响应的事件发生时会调用这个回调方法
+- 这个回调方法在内核中叫ep_poll_callback,它会将发生的事件添加到rdlist双链表中
+- 在epoll中，对于每一个事件，都会建立一个epitem结构体
+- 当调用epoll_wait检查是否有事件发生时，只需要检查eventpoll对象中的rdlist双链表中是否有epitem元素即可
+- 如果rdlist不为空，则把发生的事件复制到用户态，同时将事件数量返回给用户. 这个操作的时间复杂度是O(1)
+
+#### struct eventpoll
+
+```c
+struct eventpoll{  
+....  
+/*红黑树的根节点，这颗树中存储着所有添加到epoll中的需要监控的事件*/  
+	struct rb_root rbr;  
+/*双链表中则存放着将要通过epoll_wait返回给用户的满足条件的事件*/  
+	struct list_head rdlist;  
+....  
+};
+```
+
+#### struct epitem
+
+```c
+struct epitem{  
+	struct rb_node rbn;//红黑树节点  
+	struct list_head rdllink;//双向链表节点  
+	struct epoll_filefd ffd; //事件句柄信息  
+	struct eventpoll *ep; //指向其所属的eventpoll对象  
+	struct epoll_event event; //期待发生的事件类型  
+};
+```
+
