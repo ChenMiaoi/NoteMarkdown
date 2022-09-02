@@ -676,3 +676,188 @@ struct epitem{
 };
 ```
 
+### Epoll Code
+
+#### sock.hpp
+
+```c++
+#ifndef __SOCK_H__
+#define __SOCK_H__
+
+#include <iostream>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <cstring>
+
+namespace ns_sock{
+  class Sock {
+  public:
+    static int Socket() {
+      int sock = socket(AF_INET, SOCK_STREAM, 0);
+      if (sock < 0) {
+        std::cerr << "socket error" << std::endl;
+        exit(1);
+      }
+      return sock;
+    }
+
+    static bool Bind(int sock, unsigned short port) {
+      struct sockaddr_in local;
+      memset(&local, 0, sizeof(0));
+      local.sin_family = AF_INET;
+      local.sin_port = htons(port);
+      local.sin_addr.s_addr = INADDR_ANY;
+
+      if (bind(sock, (struct sockaddr*)&local, sizeof(local)) < 0) {
+        std::cerr << "bind error" << std::endl;
+        exit(2);
+      }
+      return true;
+    }
+
+    static bool Listen(int sock, int backlog) {
+      if (listen(sock, backlog) < 0) {
+        std::cerr << "listen error" << std::endl;
+        exit(3);
+      }
+      return true;
+    }
+  };
+}
+#endif // !__SOCK_H__
+```
+
+#### epoll_server.hpp
+
+```c++
+#include "sock.hpp"
+#include <sys/epoll.h>
+
+namespace ns_epoll{
+  const int back_log = 5;
+  const int size = 256;
+#define max_num 64
+
+  class EpollServer{
+  public:
+    EpollServer(int port) : _port(port)
+    {}
+
+    ~EpollServer() {
+      if (_listen_sock >= 0) {
+        close (_listen_sock);
+      }
+      if (_epfd >= 0) {
+        close(_epfd);
+      }
+    }
+
+  public:
+    void InitEpollServer() {
+      _listen_sock = ns_sock::Sock::Socket();
+      ns_sock::Sock::Bind(_listen_sock, _port);
+      ns_sock::Sock::Listen(_listen_sock, back_log);
+
+      std::cout << "debug, listen_sock: " << _listen_sock << std::endl;
+      if ((_epfd = epoll_create(size)) < 0) {
+        std::cerr << "epoll_create error!" << std::endl;
+        exit(4);
+      }
+      std::cout << "debug, epfd: " << _epfd << std::endl;
+    }
+    
+    void Run() {
+      //目前只有一个socket能够关心读写，也就是_listen_sock
+      AddEvenet(_listen_sock, EPOLLIN);
+      int timeout = -1;
+      struct epoll_event revs[max_num];
+      for (; ;) {
+        //返回值num表明又多少个事件就绪了，内核会将就绪事件依次放入revs中
+        int num = epoll_wait(_epfd, revs, max_num, timeout);
+        if (num > 0) {
+          //std::cout << "have event done..." << std::endl;
+          for (int i = 0; i < num; i++) {
+            int sock = revs[i].data.fd;
+            if (revs[i].events & EPOLLIN) {
+              if (sock == _listen_sock) { //链接事件就绪
+                struct sockaddr_in peer;
+                socklen_t len = sizeof(peer);
+                int sk = accept(sock, (struct sockaddr*)&peer, &len);
+                if (sk < 0) {
+                  std::cout << "accept error" << std::endl;
+                  continue;
+                }
+                std::cout << "get a new link: [ " << inet_ntoa(peer.sin_addr) << " : " << ntohs(peer.sin_port) << " ]" << std::endl;
+                AddEvenet(sk, EPOLLIN); //先进行读取，只有需要写入的时候，才主动设置EPOLLOUT
+              }else {
+                char buffer[1024];
+                ssize_t s = recv(sock, buffer, sizeof(buffer) - 1, 0);
+                if (s > 0) {
+                  buffer[s] = 0;
+                  std::cout << buffer << std::endl;
+                }else {
+                  std::cout << "client close" << std::endl;
+                  close(sock);
+                  DelEvent(sock);
+                }
+              }
+            }else if (revs[i].events & EPOLLOUT) {
+              
+            }
+          }
+        }else if (num == 0) {
+          std::cout << "timeout" << std::endl;
+        }else {
+          std::cout << "epoll error" << std::endl;
+        }
+      }
+    }
+
+    void AddEvenet(int sock, uint32_t event) {
+      struct epoll_event ev;
+      ev.events = 0;
+      ev.events |= event;
+      ev.data.fd = sock;
+      if (epoll_ctl(_epfd, EPOLL_CTL_ADD, sock, &ev) < 0) {
+        std::cerr << "epoll_ctl error, fd: " << sock << std::endl;
+      }
+    }
+
+    void DelEvent(int sock) {
+      if (epoll_ctl(_epfd, EPOLL_CTL_DEL, sock, nullptr) < 0) {
+        std::cerr << "epoll_ctr error, fd: " << sock << std::endl;
+      }
+    }
+  private:
+    int _listen_sock;
+    int _epfd;
+    uint16_t _port;
+  };
+}
+```
+
+#### server.cc
+
+```c++
+#include "epoll_server.hpp"
+
+static void Usage(std::string proc) {
+  std::cout << "Usage: " << "\n\t" << proc << " port " << std::endl;
+}
+
+int main(int argc, char* argv[]) {
+  if (argc != 2) {
+    Usage(argv[0]);
+    exit(5);
+  }
+  int port = atoi(argv[1]);
+  ns_epoll::EpollServer* ep_svr = new ns_epoll::EpollServer(port);
+
+  ep_svr->InitEpollServer();
+  ep_svr->Run();
+  return 0;
+}
+```
