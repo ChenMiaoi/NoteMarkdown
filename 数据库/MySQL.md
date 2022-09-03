@@ -443,3 +443,140 @@ create table user(
 foreign key (字段名) references 主表(列)
 ```
 
+- 外键存在的意义
+	- **建立表和表之间的关系的**
+	- 外键和外键约束是不一样的
+
+```mysql
+create table if not exists classes(
+	id int unsigned primary key comment '班级id的标识信息',
+	name varchar(20) not null comment '班级名字'
+);
+
+create table if not exists stu(
+	stu_id int unsigned primary key,  
+	stu_name varchar(20) not null,  
+	class_id int unsigned,  
+	foreign key (class_id) references classes(id)
+);
+```
+
+### 基本查询
+
+```mysql
+create table students(
+	id int unsigned primary key auto_increment,
+	sn int not null unique comment '学号',
+	name varchar(20) not null,
+	qq varchar(20)
+);
+```
+
+#### 表的数据插入
+
+```mysql
+insert [into] table_name [(column [, column] ...)] values (value_list) [, (value_list)]...
+```
+
+- 案例
+
+```mysql
+# 单行插入
+insert into students (sn, name, qq)  
+values (123, 'Lily', 2222222);
+
+# 多行插入
+insert into students (sn, name, qq) values 
+	(123, 'Lily', 2222222),
+	(321, 'Ydi', 2144535),
+	(4124, 'asjkdhj', 215413515);
+```
+
+#### 插入更新
+
+> 由于主键或者唯一键的存在，导致插入失败
+
+```mysql
+insert ... on duplicate key update column = value [, column = value] ...
+```
+
+- 案例
+
+```mysql
+insert into students values (1, 123, 'Lyya', 2154121) on duplicate key update name = 'Lyya', qq = '2154121';
+```
+
+#### 插入替换
+
+```mysql
+replace into table_name [(column [, column] ...)] values (value_list) [, (value_list)]...
+```
+
+- 案例
+
+```mysql
+replace into students(sn, name) values (20001, 'Yosy');
+```
+
+### 表的数据查询
+
+```mysql
+select 
+	[distinct] {* | {column [, column] ...}}
+	[from table_name]
+	[where ...]
+	[order by column [ASC | DESC], ...]
+	limit ...
+```
+
+#### 全列查询
+
+- 通常情况下，**不建议使用\*进行全列查询**
+	- 查询的列越多，意味着需要传输的数据量越大
+	- 可能会影响到索引的使用
+
+```mysql
+select * from students;
+```
+
+#### 指定列查询
+
+```mysql
+select column from table_name;
+```
+
+#### 为查询结果指定别名
+
+```mysql
+select column [as] alias_name from table_name;
+```
+
+#### 结果去重
+
+```mysql
+select distinct column from table_name;
+```
+
+#### where条件
+
+##### 算数运算
+
+| 运算符 | 说明 |
+| --- | --- | 
+| >, >=, <, <= | 大于，大于等于，小于，小于等于 |
+| = | 等于，NULL不安全，例如NULL = NULL的结果是NULL |
+| <=> | 等于，NULL安全，例如NULL <=> NULL的结果是TRUE(1) |
+| !=, <> | 不等于 |
+| between a0 and a1 | 范围匹配，[a0, a1], 如果a0 <= value M= a1，返回TRUE(1) |
+| is null | 是NULL |
+| is not null | 不是null |
+| like | 模糊匹配，%表示任意多个(包括0个)任意字符，\_表示任意一个字符 |
+
+##### 逻辑运算
+
+| 运算符 | 说明 |
+| --- | --- |
+| and | 多个条件都必须为TRUE(1)，结果才是TRUE(1) | 
+| or | 任意一个条件为TRUE(1)，结果为TRUE(1) |
+| not | 条件为TRUE(1)，结果为FALSE(0) |
+
