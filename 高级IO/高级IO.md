@@ -884,3 +884,31 @@ int main(int argc, char* argv[]) {
 	- 可能存在，次次都满足，但最后一次为0的情况，**recv会被阻塞，导致进程被挂起，服务器无法响应任何外部事件**
 - **ET模式下，recv或者write必须是处于非阻塞模式下进行读取**
 
+#### Epoll模型，事件处理
+
+- 原EpollServer更改为Epoller
+
+```c++
+typedef int(*callback_t) (EventItem*); //const & 输入， *输出， &输入输出
+class EventPublic {
+public:
+	EventItem() : sock(0), R(nullptr) {}
+
+	~EventItem() {}
+public:
+	//与通讯相关
+	int sock;
+	
+	//回指Epoll
+	Epoller* R;
+	
+	//有关数据处理的回调函数，用于进行逻辑解耦的。
+	//应用数据就绪等通讯细节和数据处理模块使用该方法进行解耦
+	callback_t recv_handler;
+	callback_t sent_handler;
+	callback_t error_handler;
+
+	std::string inbuffer; // 读取到的数据，缓冲区
+	std::string outbuffer; // 将发送的数据缓冲区
+};
+```
