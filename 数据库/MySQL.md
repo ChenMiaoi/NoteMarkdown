@@ -492,7 +492,7 @@ insert into students (sn, name, qq) values
 	(4124, 'asjkdhj', 215413515);
 ```
 
-#### 插入更新
+##### 插入更新
 
 > 由于主键或者唯一键的存在，导致插入失败
 
@@ -506,7 +506,7 @@ insert ... on duplicate key update column = value [, column = value] ...
 insert into students values (1, 123, 'Lyya', 2154121) on duplicate key update name = 'Lyya', qq = '2154121';
 ```
 
-#### 插入替换
+##### 插入替换
 
 ```mysql
 replace into table_name [(column [, column] ...)] values (value_list) [, (value_list)]...
@@ -518,7 +518,7 @@ replace into table_name [(column [, column] ...)] values (value_list) [, (value_
 replace into students(sn, name) values (20001, 'Yosy');
 ```
 
-### 表的数据查询
+#### 表的数据查询
 
 ```mysql
 select 
@@ -529,7 +529,7 @@ select
 	limit ...
 ```
 
-#### 全列查询
+##### 全列查询
 
 - 通常情况下，**不建议使用\*进行全列查询**
 	- 查询的列越多，意味着需要传输的数据量越大
@@ -539,27 +539,27 @@ select
 select * from students;
 ```
 
-#### 指定列查询
+##### 指定列查询
 
 ```mysql
 select column from table_name;
 ```
 
-#### 为查询结果指定别名
+##### 为查询结果指定别名
 
 ```mysql
 select column [as] alias_name from table_name;
 ```
 
-#### 结果去重
+##### 结果去重
 
 ```mysql
 select distinct column from table_name;
 ```
 
-#### where条件
+##### where条件
 
-##### 算数运算
+###### 算数运算
 
 | 运算符 | 说明 |
 | --- | --- | 
@@ -572,11 +572,55 @@ select distinct column from table_name;
 | is not null | 不是null |
 | like | 模糊匹配，%表示任意多个(包括0个)任意字符，\_表示任意一个字符 |
 
-##### 逻辑运算
+###### 逻辑运算
 
 | 运算符 | 说明 |
 | --- | --- |
 | and | 多个条件都必须为TRUE(1)，结果才是TRUE(1) | 
 | or | 任意一个条件为TRUE(1)，结果为TRUE(1) |
 | not | 条件为TRUE(1)，结果为FALSE(0) |
+
+- **别名不能使用在where表达式中**
+
+##### 结果排序
+
+```mysql
+# ASC 为升序(从小到大)
+# DESC 为降序(从大到小)
+# 默认是ASC
+
+select ... from table_name [where ...]
+	order by column [ASC | DESC], [...];
+```
+
+- 注意：
+	- **没有order by子句的查询，返回的顺序是未定义的，永远不要依赖这个顺序**
+
+#### 表的数据更新
+
+```mysql
+update table_name set column = expr [, column = expr ...] [where ...] [order by ...] [limit ...]
+```
+
+- 注意：
+	- **使用update语句必须确保语句正确，否则会发生预料之外的事情**
+
+#### 表的数据删除
+
+```mysql
+delete from table_name [where ...] [order by ...] [limit ...]
+```
+
+#### 删除表
+
+##### 截断
+
+```mysql
+truncate [table] table_name;
+```
+
+- 注意：
+	- 只能对整表使用，不能像delete一样针对部分数据操作
+	- 实际上MySQL不对数据操作，所以比delete更快，但是truncate在删除数据的时候，并不经过真正的事物，**因此无法回滚**
+	- **会重置AUTO_INCREMENT**，也就是说，经过delete删除的表，自增长不会被重置，truncate会重置自增长
 
