@@ -624,3 +624,65 @@ truncate [table] table_name;
 	- 实际上MySQL不对数据操作，所以比delete更快，但是truncate在删除数据的时候，并不经过真正的事物，**因此无法回滚**
 	- **会重置AUTO_INCREMENT**，也就是说，经过delete删除的表，自增长不会被重置，truncate会重置自增长
 
+#### 插入查询结果
+
+```mysql
+insert into table_name [(column [, column ...])] select ...
+```
+
+#### 聚合函数
+
+| 函数 | 说明 |
+| --- | --- | 
+| count([distinct] expr) | 返回查询到的数据的数量 |
+| sum([distinct] expr) | 返回查询到的数据的综合，不是数字没有意义 |
+| avg([distinct] expr) | 返回查询到的数据的平均值，不是数字没有意义 |
+| max([distinct] expr) | 返回查询到的数据的最大值，不是数字没有意义 |
+| min([distinct] expr) | 返回查询到的数据的最小值，不是数字没有意义 |
+
+```mysql
+select count(column) from table_name
+```
+
+#### GROUP BY子句
+
+> 在select中使用group by子句可以对指定列进行分组查询
+
+```mysql
+select column1, column2, ... from table group by column;
+```
+
+- 注意：
+	- 凡是在select后面的列名称，如果后续我们要进行group by分组，**那么凡是在select中出现的原表中的列名称，也必须在group by中出现**
+
+##### having
+
+- **having经常和group一起使用，作用是对分组进行筛选**
+- **必须要分组之后才能进行having**
+
+```mysql
+select arv(*) from table group by column having ...; 
+```
+
+### 函数
+
+#### 日期函数
+
+| 函数名称 | 描述 |
+| --- | --- |
+| current_date() | 当前日期 |
+| current_time() | 当前时间 |
+| current_timestamp | 当前时间戳 |
+| date(datetime) | 返回datetime参数的日期部分 |
+| date_add(date, interval, d_value_type) | 在date中添加日期或时间，interval后的数值单位可以是：year，minute，second，day |
+| date_sub(date, interval, d_value_type) | 在date中减去日期或时间，interval后的数值单位可以是：year，minute，second，day |
+| datediff(date1, date2) | 两个日期的差，单位是天 |
+| now() | 当前日期时间 |
+
+```mysql
+select current_date();
+```
+
+- 注意：
+	- 获取时间通常和select配合使用
+
