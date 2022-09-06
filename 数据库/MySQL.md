@@ -686,3 +686,56 @@ select current_date();
 - 注意：
 	- 获取时间通常和select配合使用
 
+- 案例1
+
+```mysql
+create table if not exists tmp(
+	id int primary key auto_increment,
+	brithday date
+);
+```
+
+- 案例2
+
+```mysql
+create table if not exists msg(
+	id int primary key auto_increment,
+	nick_name varchar(20) NOT NULL,
+	content varchar(30) default '这个人很很难，没有留下任何留言',
+	sendtime datetime
+)engine = InnoDB default charset = uft8;
+```
+
+#### 字符串函数
+
+| 函数 | 说明 |
+| --- | --- |
+| charset(str) | 返回字符串字符集 |
+| concat(string2 [, ...]) | 连接字符串 |
+| instr(string, substring) | 返回substring中出现的位置，没有返回0 |
+| ucase(string2) | 转换成大写 |
+| lcase(string2) | 转换成小写 |
+| left(string2, length) | 从string2中的左边起取length个字符 |
+| replace(str, search_str, replace_str) | 在str中用replace_str替换search_str |
+| length(string) | string的长度 |
+| strcmp(string1, string2) | 逐字节比较两字符串大小 |
+| substring(str, position [, length]) | 从str的position位置开始，取length个字符 |
+| ltrim(string) rtrim(string) trim(string) | 去除前空格或后空格 |
+
+- 注意：
+	- length函数返回字符串长度，**以字节为单位**。如果是多字节字符则计算多个字节数；如果是单字节字符则算作一个字节。**(与字符编码有关)**
+
+#### 数学函数
+
+| 函数 | 说明 |
+| --- | --- |
+| abs(number) | 绝对值函数 |
+| bin(decimal_number) | 十进制转换二进制 |
+| hex(decimal_number) | 十进制转换十六进制 |
+| conv(number, from_base, to_base) | 进制转换 |
+| ceiling(number) | 向上取整 |
+| floor(number) | 向下取整 |
+| format(number, decimal_places) | 格式化，保留小数位数 |
+| rand() | 返回随机浮点数，范围[0.0, 1.0] |
+| mod(number, denominator) | 取模，求余 |
+
