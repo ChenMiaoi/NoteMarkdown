@@ -1,0 +1,156 @@
+{
+  "main": {
+    "id": "ad3d12a401ffe7e9",
+    "type": "split",
+    "children": [
+      {
+        "id": "4812d729f1f54d30",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "47547d0575e561a2",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "LinearAlgebra/Linear Algebra.md",
+                "mode": "source",
+                "source": false
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "33121b4c7ce2aaa4",
+    "type": "split",
+    "children": [
+      {
+        "id": "d94b1758546a89f8",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "34802503c13549f4",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical"
+              }
+            }
+          },
+          {
+            "id": "dc7073a8f2b90442",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              }
+            }
+          },
+          {
+            "id": "801d820bdfa7fb59",
+            "type": "leaf",
+            "state": {
+              "type": "starred",
+              "state": {}
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "right": {
+    "id": "892b4043ff7069e0",
+    "type": "split",
+    "children": [
+      {
+        "id": "f4d2bec93155e069",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "8ab3a2f69f3796ed",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "LinearAlgebra/Linear Algebra.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "6407cbe11546b497",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "LinearAlgebra/Linear Algebra.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          },
+          {
+            "id": "052ac20195f49a2e",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true
+              }
+            }
+          },
+          {
+            "id": "fdc6722a67d563f7",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "LinearAlgebra/Linear Algebra.md"
+              }
+            }
+          }
+        ],
+        "currentTab": 3
+      }
+    ],
+    "direction": "horizontal",
+    "width": 206.5
+  },
+  "ribbon": {
+    "mostRecentAction": ""
+  },
+  "active": "34802503c13549f4",
+  "lastOpenFiles": [
+    "OpenCV/openCV.md",
+    "LinearAlgebra/Linear Algebra.md",
+    "Shell/Shell.md",
+    "网络/网络基础2.md",
+    "网络/网络基础3.md",
+    "深度学习/Activation functions.md",
+    "数据库/MySQL.md",
+    "网络/网络基础.md",
+    "前端(废弃)/CSS.md",
+    "高级IO/高级IO.md"
+  ]
+}

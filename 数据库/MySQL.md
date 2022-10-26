@@ -739,3 +739,36 @@ create table if not exists msg(
 | rand() | 返回随机浮点数，范围[0.0, 1.0] |
 | mod(number, denominator) | 取模，求余 |
 
+#### 其他函数
+
+##### 查询当前用户
+
+```mysql
+select user();
+```
+
+##### md5(str)
+
+> 对一个字符串进行md5摘要(通过hash映射)，摘要后得到一个32位字符串(定长)
+
+```mysql
+select md5('admin');
+```
+
+- 注意：
+	- 在MySQL中，保存用户密码不要出现明文。
+
+##### 显示当前数据库
+
+```mysql
+select database();
+```
+
+##### 判空操作
+
+```mysql
+select ifnull(var1, var2);
+```
+
+- 注意：
+	- 如果var1为null，则返回var2，否则返回var1
