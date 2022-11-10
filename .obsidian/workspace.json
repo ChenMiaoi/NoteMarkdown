@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "LinearAlgebra/Linear Algebra.md",
+                "file": "Algorithm/Algorithm.md",
                 "mode": "source",
                 "source": false
               }
@@ -86,7 +86,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "LinearAlgebra/Linear Algebra.md",
+                "file": "Algorithm/Algorithm.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -103,7 +103,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "LinearAlgebra/Linear Algebra.md",
+                "file": "Algorithm/Algorithm.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               }
@@ -126,7 +126,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "LinearAlgebra/Linear Algebra.md"
+                "file": "Algorithm/Algorithm.md"
               }
             }
           }
@@ -137,20 +137,17 @@
     "direction": "horizontal",
     "width": 206.5
   },
-  "ribbon": {
-    "mostRecentAction": ""
-  },
-  "active": "34802503c13549f4",
+  "active": "47547d0575e561a2",
   "lastOpenFiles": [
-    "OpenCV/openCV.md",
+    "杂项/The New Grammer.md",
+    "Algorithm/Algorithm.md",
     "LinearAlgebra/Linear Algebra.md",
+    "OpenCV/openCV.md",
     "Shell/Shell.md",
     "网络/网络基础2.md",
     "网络/网络基础3.md",
     "深度学习/Activation functions.md",
     "数据库/MySQL.md",
-    "网络/网络基础.md",
-    "前端(废弃)/CSS.md",
-    "高级IO/高级IO.md"
+    "网络/网络基础.md"
   ]
 }
