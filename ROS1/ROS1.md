@@ -271,3 +271,188 @@ $ code .
 
 > [!success] 当修改完保存之后，就可正常使用，如果在终端中创建完毕，则打开Vsc会自动检索更改
 
+### 解决输出中文乱码问题
+
+> [!done] 中文乱码问题，那么在源文件中加入**setlocale(LC_ALL, "")** 即可解决
+
+```c++
+#include "ros/ros.h" // ros的头文件
+
+int main(int argc, char* argv[]){
+	//解决中文乱码
+	setlocale(LC_ALL, "");
+	// setlocale(LC_CTYPE, "zh_CN.utf8");
+	// 初始化ros节点
+    ros::init(argc, argv, "hello_node);
+    // 输出日志
+    ROS_INFO("hello world!");
+    return 0;
+}
+```
+
+## ROS通信机制
+
+> 机器人是一种高度复杂的系统性实现，在机器人上可能集成各种传感器以及运动控制实现，**为了解耦合，ROS中的每一个功能点都是单独的进程**。 准确的说，**ROS是进程(Nodes)的分布式框架**。
+
+### ROS的基本通信机制
+
+> [!example] ROS中的基本通信机制有如下三种：
+> 1. 话题通信(发布订阅模式)
+> 2. 服务通信(请求响应模式)
+> 3. 参数服务器(参数共享模式)
+
+#### 话题通信
+
+> 话题通信的实现模型是比较复杂的，主要涉及到三个角色
+
+> [!example] 话题通信中的三个角色：
+> 1. ROS Master(管理者)
+> 2. Talker(发布者)
+> 3. Listener(订阅者)
+
+##### 话题通信的基本流程
+
+- Master**负责保管Takler和Listener注册的信息，并且匹配话题相同的Talker和Listener**，帮助Talker和Listener建立连接，连接建立后，Talker可以发布信息，且会被Listener订阅
+	- 其实就很像TCP中的bind，绑定之后，双方建立信道可以listen和connect
+
+![[ROS话题通信模型.png]]
+
+###### Talker发布订阅 
+
+> [!todo] Talker通过advertise(msg, RPC)将数据和RPC地址发送到Matser中，等待匹配
+
+###### Listener生成话题
+
+> [!todo] Listener通过subscribe(msg)生成对应话题
+
+###### Master匹配话题
+
+> [!todo] Matser通过发布和生成的话题进行匹配，将匹配上的话题的RPC地址发送到Listener处
+
+###### Listener通过地址访问Talker
+
+> [!todo] Listener通过connect("scan", TCP)，通过RPC向talker发送连接请求、话题名、消息类型、通讯协议。**此处是建立TCP通信**。
+
+###### Talker向Listener确认连接信息
+
+> [!todo] Talker通过RPC地址携带TCP协议向Listener确认连接
+
+###### Listener向Talker确定可以发送数据
+
+> [!todo] Listener通过connect(TCP)发送TCP协议请求数据传递
+
+###### Talker收到请求向Listener发送数据
+
+> [!todo] Talker发送数据
+
+- 注意：
+
+> [!warning] 其实在后面的TCP通信就是一个最基础的四次握手，**第一步和第二步没有顺序关系**，上述流程在ROS中已经封装好了，只需要调用接口即可
+
+##### 话题通信案例
+
+> [!todo] 需求：编写发布订阅实现，需要发布以10HZ(每秒10次)的频率发布文本信息，订阅方订阅消息并将消息内容打印输出
+
+> 针对需求分析，该模型实现主要关注三个点：发布、接受、数据。
+>> 1. 编写发布方实现
+>> 2. 编写订阅方实现
+>> 3. 编辑配置文件
+>> 4. 编译并执行
+
+###### 编写发布方实现
+
+> [!done] 编写发布方源代码
+
+```c++
+#include "ros/ros.h"
+#include "std_msgs/String.h"
+#include <string>
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "erGouZi");    // 初始化节点
+    ros::NodeHandle nh;                  // 创建ROS句柄
+    // 发布方对象的话题和消息队列数的创建
+    ros::Publisher pub = nh.advertise<std_msgs::String>("fang", 10);
+    std_msgs::String msg;                // 发布消息
+    ros::Rate rate(10);                  // 设置发送频率
+    int count = 0;                       // 定义发布编号
+    
+    while (ros::ok) {                    // ros::ok判断节点是否有效
+        // msg.data = "hello";
+        std::string str = "hello ---> "; // 通过stringstream可以流式拼接对象
+        str += std::to_string(count);
+        msg.data = ss.c_str();           // 初始化发布消息
+        pub.publish(msg);                // 发布消息
+        ROS_INFO("The pub data: %s", ss.c_str());
+        rate.sleep();                    // 延时
+        count++;
+        ros::spinOnce();                 // 官方建议添加，处理回调函数
+    }
+    
+    return 0;
+}
+```
+
+```c++
+ros::Publisher advertise<M>(
+	const std::string &topic, uint32_t queue_size, bool latch = false
+)
+
+// advertise<M> 提前告知泛型类型
+// const std::string &topic 发布者发布的话题名
+// uint32_t queue_size 消息队列的容量
+```
+
+- 注意：
+	- **ROS中的字符串类型需要使用std_msgs库中的String**
+	- 通过句柄来调用advertise函数来创建话题
+	- 发送频率通过ros::Rate来设置，ros::Rate::sleep来使用
+	- std_msgs::String类型的对象需要通过std_msgs::String::data来赋值
+	- **最终的数据发布是由ros::Publisher::publish来发布的**
+
+###### 编写订阅方实现
+
+> [!done] 编写订阅方源代码
+
+```c++
+#include "ros/ros.h"
+#include "std_msgs/String.h"
+
+void doMsg(const std_msgs::String::ConstPtr& msg) {
+    ROS_INFO("cuiHua pub data: %s", msg->data.c_str());
+}
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "cuiHua");
+    ros::NodeHandle nh;
+    // ros::Subscriber sub = nh.subscribe("fang", 10, doMsg); 
+    // 创建订阅者，定义想要订阅的话题，以及处理事件
+    ros::Subscriber sub = nh.subscribe("fang", 10, doMsg); 
+    ros::spin();
+    return 0;
+}
+```
+
+```c++
+
+ros::Subscriber subscribe<M>(
+	const std::string &topic, 
+	uint32_t queue_size, 
+	void (*fp)(const boost::shared_ptr<const M> &), 
+	const ros::TransportHints &transport_hints = ros::TransportHints()
+);
+
+// ros::Subscriber subscribe<M>在此处可以不需要声明泛型，因为可以从发布方接受到的数据中自动推导数据类型
+// const std::string &topic, 想要订阅的话题名
+// void (*fp)(const boost::shared_ptr<const M> &)， 回调函数，用于处理接收到的数据
+// std_msgs::String::ConstPtr&，const std_msgs::String*& 
+
+ros::spin(); 
+
+// 用于解决回调函数问题，如果不加，那么将会直接导致进程结束，回调函数无法运行，加上之后，可以每次都返回到回调函数处
+```
+
+- 注意：
+	- **创建的节点不能与之前创建且运行的节点同名，否则会被干扰**
+	- **订阅者的topic必须与发布者的topic一致才能接受消息**
+
