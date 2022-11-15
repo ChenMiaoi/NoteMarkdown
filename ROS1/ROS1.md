@@ -136,7 +136,7 @@ $ catkin_make
 #include "ros/ros.h" // ros的头文件
 
 int main(int argc, char* argv[]){
-	// 初始化ros节点
+	// 初始化ros节点，注意，初始化节点的名称不允许出现空格
     ros::init(argc, argv, "hello_node);
     // 输出日志
     ROS_INFO("hello world!");
@@ -455,4 +455,406 @@ ros::spin();
 - 注意：
 	- **创建的节点不能与之前创建且运行的节点同名，否则会被干扰**
 	- **订阅者的topic必须与发布者的topic一致才能接受消息**
+
+> [!tip] 可以使用rostopic echo topic_name命令查看是否发布完成
+
+###### 使用计算图查看发布订阅
+
+> [!tip] 使用rqt_graph启动计算图
+
+![[发布模型计算图.png]]
+
+> 计算图其实没有任何功能，但是可以展现不同节点、模块之间的关系
+
+###### C++和Python解耦合
+
+> 在ROS中，不论是使用C++还是Python作为语言都是一样的，最大的差距就在于，**C++编写比较复杂但运行效率高，Python编写快捷但运行效率低**，因此ROS提供了让C++和Python互相运行的机制
+
+> [!success] C++发布方
+
+```c++
+#include "ros/ros.h"
+#include "std_msgs/String.h"
+#include <string>
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "erGouZi");    // 初始化节点
+    ros::NodeHandle nh;                  // 创建ROS句柄
+    // 发布方对象的话题和消息队列数的创建
+    ros::Publisher pub = nh.advertise<std_msgs::String>("fang", 10);
+    std_msgs::String msg;                // 发布消息
+    ros::Rate rate(10);                  // 设置发送频率
+    int count = 0;                       // 定义发布编号
+    
+    while (ros::ok) {                    // ros::ok判断节点是否有效
+        // msg.data = "hello";
+        std::string str = "hello ---> "; // 通过stringstream可以流式拼接对象
+        str += std::to_string(count);
+        msg.data = ss.c_str();           // 初始化发布消息
+        pub.publish(msg);                // 发布消息
+        ROS_INFO("The pub data: %s", ss.c_str());
+        rate.sleep();                    // 延时
+        count++;
+        ros::spinOnce();                 // 官方建议添加，处理回调函数
+    }
+    
+    return 0;
+}
+```
+
+> [!success] Python订阅方
+
+```python
+#! /usr/bin/env python
+import rospy
+from std_msgs.msg import String
+
+def doMsg(msg: String):
+    rospy.loginfo("sub data: %s", msg.data)
+
+if __name__ == "__main__":
+    rospy.init_node("huaHua")
+    sub = rospy.Subscriber("fang", String, doMsg, queue_size = 10)
+    rospy.spin()
+```
+
+> 只需要运行两个编译好的文件，就可以互相通信，并不需要多余操作
+
+##### 话题通信自定义Msg
+
+> 在ROS中，数据载体是一个较为重要的部分，ROS通过std_msgs封装了一些原生数据类型：String、int32、Char、Bool等，**但是一般都只包含了一个data字段， 因此描述性较差，所以需要学习自定义消息类型**
+
+- msgs字段类型
+
+| 类型 | 含义 | 类型 | 含义 |
+| --- | --- | --- | --- |
+| int8 | 8位的无符号int | int16 | 16位无符号int |
+| int32 | 32位的无符号int | int64 | 64位无符号int |
+| string | 字符串类型 | time | 时间 |
+| duration | 时间 | other msg files | 其他msg文件类型 | 
+| variable-length arrar[] | 可变的数组长度 | fixed-length array[C] | 固定的数组长度 |
+| Header | 标头，包含时间戳和ROS中的坐标帧 |
+
+> [!example]  自定义msg有以下几步：
+> 1. 按照固定格式创建msg文件
+> 2. 编辑配置文件
+> 3. 编译生成可以被C++或Python调用的中间文件
+
+> 需求：创建自定义信息，该消息包含人的姓名、身高、年龄信息
+
+###### 创建msg文件
+
+> [!todo] 在功能包中创建msg文件夹，创建file_name.msg，设置字段
+
+```linux
+$ mkdir msg
+$ cd msg
+$ touch Person.msg
+$ vim Person.msg
+```
+
+```msg
+string  name
+int32   age
+float32 height
+```
+
+###### 编辑配置文件
+
+> [!todo] 分别编辑package.xml和CMakeLists.txt文件
+
+```xml
+<build_depend>roscpp</build_depend>
+<build_depend>rospy</build_depend>
+<build_depend>std_msgs</build_depend>
+
+<exec_depend>roscpp</exec_depend>
+<exec_depend>rospy</exec_depend>
+<exec_depend>std_msgs</exec_depend>
+
+ <!-- 找到上面六条语句，仿写依赖 -->
+<build_depend>roscpp</build_depend>
+<build_depend>rospy</build_depend>
+<build_depend>std_msgs</build_depend>
+<build_depend>message_generation</build_depend>
+
+<exec_depend>roscpp</exec_depend>
+<exec_depend>rospy</exec_depend>
+<exec_depend>std_msgs</exec_depend>
+<exec_depend>message_runtime</exec_depend>
+```
+
+- 主要在package.xml文件中添加两条依赖
+	- <build_depend>message_generation\</build_depend>
+	- <exec_depend>message_runtime\</exec_depend>
+
+```cmakelists
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  rospy
+  std_msgs
+)
+
+# 第一步在find_package中加入message_generation
+
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  rospy
+  std_msgs
+  message_generation
+)
+
+# add_message_files(
+#   FILES
+#   Message1.msg
+#   Message2.msg
+# )
+
+# 第二步，找到add_message_files取消注释，添加自己的.msg文件
+add_message_files(
+  FILES
+  Person.msg
+)
+
+# generate_messages(
+#   DEPENDENCIES
+#   std_msgs
+# )
+
+# 第三步，放开generate_message，不需要做任何更改
+
+catkin_package(
+#  INCLUDE_DIRS include
+#  LIBRARIES custom_msg
+#  CATKIN_DEPENDS roscpp rospy std_msgs
+#  DEPENDS system_lib
+)
+
+# 第四步，放开CATKIN_DEPENDS roscpp rospy std_msgs， 添加message_runtime
+catkin_package(
+#  INCLUDE_DIRS include
+#  LIBRARIES custom_msg
+ CATKIN_DEPENDS roscpp rospy std_msgs message_runtime
+#  DEPENDS system_lib
+)
+```
+
+> [!done] 到此，配置文件就编辑完毕
+
+###### 编译
+
+> [!todo] 使用catkin编译后，会生成C++或Python需要调用的中间文件
+
+```linux
+Scanning dependencies of target std_msgs_generate_messages_py
+[  0%] Built target std_msgs_generate_messages_py
+Scanning dependencies of target _custom_msg_generate_messages_check_deps_Person
+Scanning dependencies of target std_msgs_generate_messages_nodejs
+[  0%] Built target std_msgs_generate_messages_nodejs
+Scanning dependencies of target std_msgs_generate_messages_cpp
+[  0%] Built target std_msgs_generate_messages_cpp
+Scanning dependencies of target std_msgs_generate_messages_eus
+[  0%] Built target std_msgs_generate_messages_eus
+Scanning dependencies of target std_msgs_generate_messages_lisp
+[  0%] Built target _custom_msg_generate_messages_check_deps_Person
+[  0%] Built target std_msgs_generate_messages_lisp
+Scanning dependencies of target custom_msg_generate_messages_nodejs
+[ 14%] Generating Javascript code from custom_msg/Person.msg
+Scanning dependencies of target custom_msg_generate_messages_py
+[ 28%] Generating Python from MSG custom_msg/Person
+[ 28%] Built target custom_msg_generate_messages_nodejs
+Scanning dependencies of target custom_msg_generate_messages_cpp
+[ 42%] Generating C++ code from custom_msg/Person.msg
+[ 42%] Built target custom_msg_generate_messages_cpp
+Scanning dependencies of target custom_msg_generate_messages_eus
+[ 57%] Generating EusLisp code from custom_msg/Person.msg
+[ 71%] Generating Python msg __init__.py for custom_msg
+[ 85%] Generating EusLisp manifest code for custom_msg
+[ 85%] Built target custom_msg_generate_messages_py
+Scanning dependencies of target custom_msg_generate_messages_lisp
+[100%] Generating Lisp code from custom_msg/Person.msg
+[100%] Built target custom_msg_generate_messages_lisp
+[100%] Built target custom_msg_generate_messages_eus
+Scanning dependencies of target custom_msg_generate_messages
+[100%] Built target custom_msg_generate_messages
+```
+
+- 当出现如上提示后，则说明编译成功
+
+> [!warning] 生成的C++需要的中间文件全在workspace/devel/include文件夹中
+
+```c++
+namespace custom_msg
+{
+template <class ContainerAllocator>
+struct Person_
+{
+  typedef Person_<ContainerAllocator> Type;
+
+  Person_()
+    : name()
+    , age(0)
+    , height(0.0)  {
+    }
+  Person_(const ContainerAllocator& _alloc)
+    : name(_alloc)
+    , age(0)
+    , height(0.0)  {
+  (void)_alloc;
+    }
+...
+```
+
+> [!warning] 生成的Python需要的中间文件全在workspace/devel/lib/python3/dist-packages/pkg_name/msg文件夹中
+
+```python
+class Person(genpy.Message):
+  _md5sum = "0478132ca0c3bd1c734b5491000dabb1"
+  _type = "custom_msg/Person"
+  _has_header = False  # flag to mark the presence of a Header object
+  _full_text = """string name
+int32 age
+float32 height"""
+  __slots__ = ['name','age','height']
+  _slot_types = ['string','int32','float32']
+
+  def __init__(self, *args, **kwds):
+    """
+    Constructor. Any message fields that are implicitly/explicitly
+    set to None will be assigned a default value. The recommend
+    use is keyword arguments as this is more robust to future message
+    changes.  You cannot mix in-order arguments and keyword arguments.
+
+    The available fields are:
+       name,age,height
+
+    :param args: complete set of field values, in .msg order
+    :param kwds: use keyword arguments corresponding to message field names
+    to set specific fields.
+    """
+    if args or kwds:
+      super(Person, self).__init__(*args, **kwds)
+      # message fields cannot be None, assign default values for those that are
+      if self.name is None:
+        self.name = ''
+      if self.age is None:
+        self.age = 0
+      if self.height is None:
+        self.height = 0.
+    else:
+      self.name = ''
+      self.age = 0
+      self.height = 0.
+```
+
+###### 使用自定义的msg类型
+
+> [!todo] 首先需要配置Vsc中的c_cpp_properties.json，否则导入msg可能会出错
+
+```json
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/opt/ros/noetic/include/**",
+        "/home/zack/ros_study/custom_msg/src/custom_msg/include/**",
+        "/usr/include/**",
+        "../dir_name/devel/include/**" // 此处就是需要添加的中间文件的绝对路径
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
+```
+
+> [!todo] 编写发布方源文件
+
+```c++
+#include "ros/ros.h"
+#include "custom_msg/Person.h"
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "Talker");
+    ros::NodeHandle nh;
+    ros::Publisher pub = nh.advertise<custom_msg::Person>("topic", 10);
+    custom_msg::Person person;
+    person.name = "Lily";
+    person.age  = 18;
+    person.height = 1.73;
+    ros::Rate rate(1);
+
+    while (ros::ok()) {
+        pub.publish(person);
+        rate.sleep();
+        person.age += 1;
+        ros::spinOnce();
+    }
+    return 0;
+}
+```
+
+- 注意：
+	- 自动生成的Person类，没有有参构造，只能通过调用成员进行赋值，或者通过拷贝构造
+
+> [!todo] 编写订阅方源文件
+
+```c++
+#include "ros/ros.h"
+#include "custom_msg/Person.h"
+#include <functional>
+
+void doMsg(const custom_msg::Person& msg) {
+    ROS_INFO("sub msg: %s, %d, %.2f", msg.name.c_str(), msg.age, msg.height);
+}
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "Listener");
+    ros::NodeHandle nh;
+    ros::Subscriber sub = nh.subscribe("topic", 10, doMsg);
+    // std::function<void(const custom_msg::Person&)> func = [](const custom_msg::Person& msg) {
+    //     ROS_INFO("sub msg: %s, %d, %.2f", msg.name.c_str(), msg.age, msg.height);
+    // };
+    // ros::Subscriber sub = nh.subscribe("topic", 10, func);
+    ros::spin();
+    return 0;
+}
+```
+
+> [!warning] 注意，编写完成之后，不能直接编译，必须还得配置以下CMakeLists.txt
+
+```CMakeLists
+# add_dependencies(
+	${PROJECT_NAME}_node 
+	${${PROJECT_NAME}_EXPORTED_TARGETS} 
+	${catkin_EXPORTED_TARGETS}
+)
+
+add_dependencies(custom_pub ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(custom_sub ${PROJECT_NAME}_generate_messages_cpp)
+
+# 更改上述依赖，是为了在编译源文件的时候确定让自定义的msg已经编译了，从而不会引发冲突
+```
+
+> [!fail] 警示，不能直接使用rostopic echo topic_name，因为数据类型是自定义的，需要进入工作目录刷新
+
+```linux
+$ rostopic echo topic
+ERROR: Cannot load message class for [custom_msg/Person]. Are your messages built?
+$ cd workspace
+[workspace]$ source ./devel/setup.bash
+[workspace]$ rostopic echo topic
+name: "Lily"
+age: 106
+height: 1.7300000190734863
+---
+```
 
