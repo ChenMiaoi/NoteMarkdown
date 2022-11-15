@@ -858,3 +858,351 @@ height: 1.7300000190734863
 ---
 ```
 
+#### 服务通信
+
+> 服务通信也是ROS中极其常用的通信模式。**服务通信是基于请求响应模式的，是一种应答机制**
+
+##### 服务通信的基本流程
+
+> 以请求响应的方式实现不同节点之间数据交互的通信模式。**用于偶然的、对实时性有要求、有一定逻辑处理需求的数据传输场景**
+
+> [!example] 服务通信略微简单，模型主要涉及到三个角色：
+> 1. ROS Master(管理者)
+> 2. Server(服务端)
+> 3. Client(客户端)
+
+> Master负责保管Server和Client注册的信息，并匹配话题相同的Server与Client，帮助Server与Client建立连接，完成后，**Client发送请求信息，Server返回相应信息**
+
+![[服务通信.png]]
+
+###### Talker注册信息
+
+> [!todo] Talker向Master提交服务名称和自身信息
+
+###### Listener注册信息
+
+> [!todo] Listener向Matser提交需要获取服务名称和自身信息
+
+###### Master匹配服务
+
+> [!todo] Master在注册信息中，匹配服务对应的Talker和Listener
+
+###### Listener发起请求
+
+> [!todo] Listener向Talker发起请求，获取资源
+
+###### Talker响应请求
+
+> [!todo] Talker接受Listener请求，发送资源
+
+##### 服务通信自定义Srv
+
+> [!example]  自定义srv有以下几步：
+> 1. 按照固定格式创建srv文件
+> 2. 编辑配置文件
+> 3. 编译生成可以被C++或Python调用的中间文件
+
+> [!todo] 需求：创建服务器与客户端通信的数据载体
+
+###### 创建srv文件
+
+> 服务器通信中，数据分成两部分，请求与响应，在srv文件中请求和响应使用---分割
+
+> [!todo] 在功能包下新建srv目录，添加file_name.srv文件
+
+```linux
+$ mkdir srv
+$ cd srv
+$ touch AddInts.srv
+$ vim AddInts.srv
+```
+
+```srv
+int32 num1
+int32 num2
+---
+int32 sum
+```
+
+> [!warning] 注意：请求和响应使用"---"分割
+
+###### 编辑配置文件
+
+> [!todo] 分别编辑package.xml和CMakeLists.txt文件
+
+```xml
+ <!-- package.xml文件的更改和话题通信自定义Msg一样 -->
+<build_depend>roscpp</build_depend>
+<build_depend>rospy</build_depend>
+<build_depend>std_msgs</build_depend>
+<build_depend>message_generation</build_depend>
+
+<exec_depend>roscpp</exec_depend>
+<exec_depend>rospy</exec_depend>
+<exec_depend>std_msgs</exec_depend>
+<exec_depend>message_runtime</exec_depend>
+```
+
+```CMakeLists.txt
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  rospy
+  std_msgs
+)
+
+# 第一步，还是需要依赖message_generation
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  rospy
+  std_msgs
+  message_generation
+)
+
+# add_service_files(
+#   FILES
+#   Service1.srv
+#   Service2.srv
+# )
+
+# 第二步，找到add_service_files依赖，添加自定义的srv
+add_service_files(
+  FILES
+  AddInts.srv
+)
+
+# generate_messages(
+#   DEPENDENCIES
+#   std_msgs
+# )
+
+# 第三步，因为自定义的messages需要依赖generate_messages
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+)
+
+catkin_package(
+#  INCLUDE_DIRS include
+#  LIBRARIES server_comm
+#  CATKIN_DEPENDS roscpp rospy std_msgs
+#  DEPENDS system_lib
+)
+
+# 第四步，放开catkin的依赖，添加自定义srv
+catkin_package(
+#  INCLUDE_DIRS include
+#  LIBRARIES server_comm
+  CATKIN_DEPENDS roscpp rospy std_msgs message_runtime
+#  DEPENDS system_lib
+)
+
+# add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+# 第五步，防止所需其他依赖在运行前没有执行
+add_dependencies(exec_name ${PROJECT_NAME}_gencpp)
+```
+
+> [!success] 到此，配置文件编辑完毕
+
+###### 编译
+
+> [!todo] 使用catkin编译后，会在dir_name/devel文件夹下生成C++或Python需要对应的中间文件
+
+> [!warning] 生成的C++需要的中间文件全在workspace/devel/include文件夹中
+
+```c++
+// server_comm/AddInts.h
+namespace server_comm {
+
+struct AddInts {
+
+	typedef AddIntsRequest Request;
+	typedef AddIntsResponse Response;
+	Request request;
+	Response response;
+
+	typedef Request RequestType;
+	typedef Response ResponseType;
+
+	}; // struct AddInts
+} // namespace server_comm
+
+// server_comm/AddIntsRequest.h
+namespace server_comm {
+	template <class ContainerAllocator>
+	struct AddIntsRequest_
+	{
+		  typedef AddIntsRequest_<ContainerAllocator> Type;
+		
+		  AddIntsRequest_()
+		    : num1(0)
+		    , num2(0)  {
+		    }
+		  AddIntsRequest_(const ContainerAllocator& _alloc)
+		    : num1(0)
+		    , num2(0)  {
+		  (void)_alloc;
+		    }
+		
+		   typedef int32_t _num1_type;
+		  _num1_type num1;
+		
+		   typedef int32_t _num2_type;
+		  _num2_type num2;
+		
+		  typedef boost::shared_ptr< ::server_comm::AddIntsRequest_<ContainerAllocator> > Ptr;
+		  typedef boost::shared_ptr< ::server_comm::AddIntsRequest_<ContainerAllocator> const> ConstPtr;
+	}; // struct AddIntsRequest_
+
+// server_comm/AddIntsResponse.h
+namespace server_comm {
+	template <class ContainerAllocator>
+	struct AddIntsResponse_ {
+		  typedef AddIntsResponse_<ContainerAllocator> Type;
+		
+		  AddIntsResponse_()
+		    : sum(0)  {
+		    }
+		  AddIntsResponse_(const ContainerAllocator& _alloc)
+		    : sum(0)  {
+		  (void)_alloc;
+		    }
+		
+		   typedef int32_t _sum_type;
+		  _sum_type sum;
+		
+		  typedef boost::shared_ptr< ::server_comm::AddIntsResponse_<ContainerAllocator> > Ptr;
+		  typedef boost::shared_ptr< ::server_comm::AddIntsResponse_<ContainerAllocator> const> ConstPtr;
+	
+	}; // struct AddIntsResponse_
+```
+
+> [!warning] 生成的Python需要的中间文件全在workspace/devel/lib/python3/dist-packages/pkg_name/msg文件夹中
+
+```python
+class AddIntsRequest(genpy.Message):
+  _md5sum = "c68f3979e1a90aac7d1c75a1096d1e60"
+  _type = "server_comm/AddIntsRequest"
+  _has_header = False  # flag to mark the presence of a Header object
+  _full_text = """int32 num1
+int32 num2
+"""
+  __slots__ = ['num1','num2']
+  _slot_types = ['int32','int32']
+
+  def __init__(self, *args, **kwds):
+    """
+    Constructor. Any message fields that are implicitly/explicitly
+    set to None will be assigned a default value. The recommend
+    use is keyword arguments as this is more robust to future message
+    changes.  You cannot mix in-order arguments and keyword arguments.
+
+    The available fields are:
+       num1,num2
+
+    :param args: complete set of field values, in .msg order
+    :param kwds: use keyword arguments corresponding to message field names
+    to set specific fields.
+    """
+    if args or kwds:
+      super(AddIntsRequest, self).__init__(*args, **kwds)
+      # message fields cannot be None, assign default values for those that are
+      if self.num1 is None:
+        self.num1 = 0
+      if self.num2 is None:
+        self.num2 = 0
+    else:
+      self.num1 = 0
+      self.num2 = 0
+```
+
+##### 服务通信案例
+
+> [!todo] 需求：实现两个数字的求和，客户端节点运行会向服务器发送两个数字，服务器端节点接收两个数字求和并将结果响应回客户端
+
+###### 配置自定义Srv路径
+
+> [!fail] 什么玩意？还需要教？
+
+###### 编写服务端源文件
+
+```c++
+#include "ros/ros.h"
+#include "server_comm/AddInts.h"
+
+bool doNums(server_comm::AddInts::Request& request, 
+            server_comm::AddInts::Response& response) {
+    ROS_INFO("the recieve num1: %d, num2: %d", request.num1, request.num2);
+    response.sum = request.num1 + request.num2;
+    ROS_INFO("the gain sum: %d", response.sum);
+    return true;
+}
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "server");
+    ros::NodeHandle nh;
+    ros::ServiceServer server = nh.advertiseService("topic", doNums);
+    ros::spin();
+    return 0;
+}
+```
+
+> [!done] 完成服务端编写
+
+###### 编写客户端源文件
+
+```c++
+#include "ros/ros.h"
+#include "server_comm/AddInts.h"
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "client");
+    ros::NodeHandle nh;
+    ros::ServiceClient client = nh.serviceClient<server_comm::AddInts>("topic");
+    server_comm::AddInts peer;
+    while (ros::ok()) {
+        std::cin >> peer.request.num1;
+        std::cin >> peer.request.num2;
+
+        if (client.call(peer)) {
+            ROS_INFO("response success");
+            ROS_INFO("recieve the peer result: %d", peer.response.sum);
+        }else {
+            ROS_INFO("resonse error!");
+            exit(1);
+        }
+    }
+    return 0;
+}
+```
+
+> [!done] 完成客户端编写
+
+###### 配置CMakeLists.txt
+
+> [!warning] 如果需要配置add_dependencies，那么需要做以下调整
+
+```CMakeLists.txt
+## Add cmake target dependencies of the library
+## as an example, code may need to be generated before libraries
+## either from message generation or dynamic reconfigure
+# add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+## Declare a C++ executable
+## With catkin_make all packages are built within a single CMake context
+## The recommended prefix ensures that target names across packages don't collide
+# add_executable(${PROJECT_NAME}_node src/server_comm_node.cpp)
+```
+
+> [!fail] add_dependencies不允许在add_executable之前，*add_dependencies和target_link没有顺序要求*。add_dependencies的target_name必须和add_executable的target_name相同
+
+###### 测试服务通信
+
+> [!tip] 可以通过命令rosservice call topic_name msg
+
+```linux
+[bash1]$ roscore
+[bash2]$ rosrun pkg_name target_name
+[bash3]$ rosservice call topic "num1: 2 num2: 3"
+sum: 6
+```
