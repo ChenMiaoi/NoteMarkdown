@@ -106,6 +106,16 @@ $ cd dir_name
 $ catkin_make
 ```
 
+### 创建工作空间(Python)
+
+> [!done] 创建工作空间
+
+```linux
+$ mkdir -p dir_name/scripts
+$ cd dir_name
+$ catkin_make
+```
+
 - 注意：
 	- catkin_make需要在创建的工作空间中使用
 
@@ -165,6 +175,32 @@ int main(int argc, char* argv[]){
 - 编写：
 	- 将这几行的注释解开，然后将${PROJECT_NAME}\_node换成exec_name(自己想要的名字)，将后面的src/package_node.cpp换成刚刚touch的file_name.cc
 	- **注意，两个${PROJECT_NAME}\_node必须是一样的名字, 建议替换的名字是src中源文件的名字**
+
+### 编写配置文件（Python)
+
+> [!done] 编辑配置文件
+
+- 在CMakeLists.txt中，找到代码
+
+> [!warning] 在修改之前，必须将需要编译的Python文件添加可执行权限
+
+```linux
+$ chmod +x my_python_script.py
+```
+
+```CMakeLists.txt
+# catkin_install_python(PROGRAMS
+#   scripts/my_python_script
+#   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+# )
+
+catkin_install_python(PROGRAMS
+  scripts/param_svr_set_p.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+```
+
+- 注意：**my_python_script需要更改为自己的.py文件**
 
 ### 编译执行
 
@@ -1206,3 +1242,357 @@ int main(int argc, char* argv[]) {
 [bash3]$ rosservice call topic "num1: 2 num2: 3"
 sum: 6
 ```
+
+#### 参数服务器
+
+> 参数服务器在ROS中主要用于不同节点之间的数据共享。**参数服务器相当于是独立于所有节点的一个公共容器。可以将数据存储在该容器中，被不同的节点调用**
+
+##### 参数服务器的基本流程
+
+> 主要用于**存在数据共享的场景**，以共享的方式实现不同节点之间的数据交互的通信模式。
+
+> [!example] 参数服务器的实现最为简单，依旧涉及三个角色：
+> 1. ROS Master(管理者)
+> 2. Talker(参数设置者)
+> 3. Listener(参数调用者)
+
+> Matser作为一个公共的容器保存参数，Talker可以向容器中设置参数，Listener可以获取参数
+![[ROS参数服务器.png]]
+
+> [!warning] 以下步骤全部通过RPC地址进行发送
+
+###### Talker设置参数
+
+> [!todo] Talker通过setParam()来向Master设置参数和对应参数数据
+
+###### Listener获取参数数据
+
+> [!todo] Listener通过getParam()来向Master请求对应参数数据
+
+###### Master发送Listener请求的对应数据
+
+> [!todo] Master向Listener发送匹配的参数数据
+
+###### 参数服务器可使用的数据类型
+
+| 类型 | 含义 | 类型 | 含义 | 
+| :---: | :---: | :---: | :---: | 
+| 32-bit integers | 32位整型 | booleans | 布尔代数 |
+| strings | 字符串 | doubles | 浮点 |
+| iso8601 dates | 日期和时间 | lists | 列表 |
+| base64-encoded binary data | Base64传输字节码 | 字典 | - |
+
+- ISO 8601是**日期和时间的表示方法**，全称为《数据存储和交换形式·信息交换·日期和时间的表示方法》
+- **Base64是网络上最常见的用于传输8Bit 字节码 的编码方式之一**，是一种用64个字符来表示任意 二进制 数据的方法
+
+> [!fail] 注意：参数服务器不是为高性能而设计的，因此最好用存储静态的非二进制简单数据
+> 
+
+##### 参数服务器案例(C++)
+
+> [!todo] 需求：实现参数服务器参数的增删查改
+
+- 在C++中的参数服务器，是有着两套API的
+
+```c++
+1. ros::NodeHandle
+2. ros::param
+```
+
+###### 参数服务器的增加和修改
+
+> [!todo] 编写参数服务器的增加和修改源文件
+
+```c++
+#include "ros/ros.h"
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "param_set_c");
+    ros::NodeHandle nh;
+    nh.setParam("type", "Type");
+    nh.setParam("radius", 0.15);
+
+    // ros::param::set("type", "Type");
+    // ros::param::set("radius", 0.15);
+
+    nh.setParam("type", "Non-Type");
+    nh.setParam("radius", 0.2);
+
+    // ros::param::set("type", "Non-Type");
+    // ros::param::set("radius", 0.2);
+    return 0;
+}
+```
+
+```c++
+NodeHandle::setParam(key, value);
+
+ros::param::set(key, value);
+
+// 在ROS中，可以使用这两种进行增加参数，使用的方式一模一样，通过键值对传递参数和对应数据
+// 如果重复调用增加API，且key值相同，那么会覆盖之前的设置，达到修改的目的
+// setParam和set重载了很多版本，包括基本内置类型，和vector，string，map
+```
+
+> [!tip] 可以通过rosparam查看ROS所有设置的参数
+
+```linux
+$ rosparam list
+/radius
+/rosdistro
+/roslaunch/uris/host_ubuntu__35995
+/rosversion
+/run_id
+/type
+
+$ rosparam get param_name
+$ rosparam get /radius
+0.15
+$ rosparam get /type
+Type
+```
+
+###### 参数服务器的获取
+
+> [!todo] 编写参数服务器获取的源文件
+
+- 同样的，依旧有两套API
+
+```c++
+1. ros::NodeHandle::param(key, defaultVar)
+// 如果存在，返回对应结果，否则返回默认值
+2. ros::NodeHandle::getParam(key, refVar)
+// 如果存在，返回true，且将key对应的值赋值给refVar；如果不存在，返回false，且不赋值
+3. ros::NodeHandle::getParamCached(kay, refVar)
+// 如果存在，返回true，且将key对应的值赋值给refVar；如果不存咋，返回false，且不赋值
+// 提高变量的获取效率 -> 会首先判断是否调用过，如果有过，则直接从本地缓存中获取，提高获取效率
+4. ros::NodeHandle::getParamNames(std::vector<std::string>)
+// 获取所有的键，并存储在vector中
+5. ros::NodeHandle::hasParam(key)
+// 如果存在这个键，返回true，否则返回false
+6. ros::NodeHandle::searchParam(searchVar, refVar)
+// 搜索指定的键，如果存在就将key对应的值赋值给refVar
+
+1. ros::param::param -> ros::NodeHandle::param
+2. ros::param::get -> ros::NodeHandle::getParam
+3. ros::param::getCached -> ros::NodeHandle::getParamCached
+4. ros::param::getParamNames -> ros::NodeHandle::getParamNames
+5. ros::param::has -> ros::NodeHandle::hasParam
+6. ros::param::search -> ros::NodeHandle::searchParam
+```
+
+```c++
+#include "ros/ros.h"
+#include <vector>
+#include <string>
+
+int main(int argc, char *argv[]) {
+    ros::init(argc, argv, "param_get_c");
+    ros::NodeHandle nh;
+    double radius = nh.param("radius", 0.5);
+    ROS_INFO("radius = %.2f", radius);
+
+    bool ref = nh.getParam("radius", radius);
+    if (ref) {
+        ROS_INFO("get the radius is: %.2f", radius);
+    }else {
+        ROS_INFO("radius is not found");
+    }
+
+    ref = nh.getParamCached("radius", radius);
+    if (ref) {
+        ROS_INFO("get the radius is: %.2f", radius);
+    }else {
+        ROS_INFO("radius is not found");
+    }
+
+    std::vector<std::string> names;
+    nh.getParamNames(names);
+    for (auto&& name: names) {
+        ROS_INFO("the key is: %s", name.c_str());
+    }
+
+    if (nh.hasParam("radius")) {
+        ROS_INFO("the radius exsist");
+    }else {
+        ROS_INFO("don't exsist");
+    }
+
+    std::string key;
+    nh.searchParam("radius", key);
+    ROS_INFO("seach result is: %s", key.c_str());
+
+    // double radius = ros::param::param("radius", 0.5);
+    // ROS_INFO("radius = %.2f", radius);
+
+    // bool ref = ros::param::get("radius", radius);
+    // if (ref) {
+    //     ROS_INFO("get the radius is: %.2f", radius);
+    // }else {
+    //     ROS_INFO("radius is not found");
+    // }
+
+    // ref = ros::param::getCached("radius", radius);
+    // if (ref) {
+    //     ROS_INFO("get the radius is: %.2f", radius);
+    // }else {
+    //     ROS_INFO("radius is not found");
+    // }
+
+    // std::vector<std::string> names;
+    // ros::param::getParamNames(names);
+    // for (auto&& name: names) {
+    //     ROS_INFO("the key is: %s", name.c_str());
+    // }
+
+    // if (ros::param::has("radius")) {
+    //     ROS_INFO("the radius exsist");
+    // }else {
+    //     ROS_INFO("don't exsist");
+    // }
+
+    // std::string key;
+    // ros::param::search("radius", key);
+    // ROS_INFO("seach result is: %s", key.c_str());
+    return 0;
+}
+```
+
+> [!done] 完成了API的编写
+
+###### 参数服务器的参数删除
+
+> [!todo] 参数服务器的删除源文件编写
+
+```c++
+1. ros::NodeHandle::delParam
+
+1. ros::param::del
+```
+
+```c++
+#include "ros/ros.h"
+
+int main(int argc, char *argv[]) {
+    ros::init(argc, argv, "param_del_c");
+    ros::NodeHandle nh;
+
+    bool ref = nh.deleteParam("radius");
+    if (ref) {
+        ROS_INFO("del success");
+    }else {
+        ROS_INFO("del failed");
+    }
+
+    ref = ros::param::del("type");
+    if (ref) {
+        ROS_INFO("del success");
+    }else {
+        ROS_INFO("del failed");
+    }
+    return 0;
+}
+```
+
+> [!done] 完成删除源文件的编写
+
+##### 参数服务器案例(Python)
+
+###### 参数服务器的增加和修改
+
+> [!todo] 编写参数服务器的增加和修改源文件
+
+```Python
+1. rospy.set_param()
+
+# 和C++ API用法一致
+```
+
+```Python
+#! /usr/bin/env python
+
+import rospy
+
+if __name__ == "__main__":
+    rospy.init_node("param_set_py")
+    rospy.set_param("type", "Type")
+    rospy.set_param("radius", 0.15)
+
+    rospy.set_param("type", "Non-Type")
+    rospy.set_param("radius", 0.50)
+```
+
+###### 参数服务器的获取
+
+> [!todo] 编写参数服务器获取的源文件
+
+```Python
+1. rospy.get_param(key, defaultVar)
+# 当键存在时，返回对应的键，反之返回默认值
+2. rospy.get_param_cached(key, defaultVar)
+# 和get_param一致，只是效率更高
+3. rospy.get_param_names()
+# 获取所有参数的键的集合
+4. rospy.has_param(key)
+# 判断是否有这个键
+5. rospy.seach_param
+# 查找某个键，并返回完整的键名
+
+# 和C++ API用法一致
+```
+
+```Python
+#! /usr/bin/env python
+
+import rospy
+
+if __name__ == "__main__":
+    rospy.init_node("param_get_py")
+    radius = rospy.get_param("radius", 0.50)
+    radius2 = rospy.get_param("radius_m", 0.82)
+
+    rospy.loginfo("radius = %.2f", radius)
+    rospy.loginfo("radius2 = %.2f", radius2)
+
+    radius = rospy.get_param_cached("radius", 0.5)
+    radius2 = rospy.get_param_cached("radius_m", 0.82)
+
+    rospy.loginfo("radius = %.2f", radius)
+    rospy.loginfo("radius2 = %.2f", radius2)
+
+    names = rospy.get_param_names()
+    for name in names:
+        rospy.loginfo("name = %s", name)
+
+    if rospy.has_param("type"):
+        rospy.loginfo("type exsist")
+    else:
+        rospy.loginfo("don't exsist")
+    
+    key = rospy.search_param("type")
+    rospy.loginfo("key = %s", key)
+```
+
+###### 参数服务器的参数删除
+
+> [!todo] 参数服务器的删除源文件编写
+
+```Python
+1. rospy.delete_parm(key)
+```
+
+```Python
+#! /usr/bin/env python
+
+import rospy
+
+if __name__ == "__main__":
+    rospy.init_node("param_del_py")
+    try:
+        rospy.delete_param("type")
+    except Exception as e:
+        rospy.loginfo("deleted param is not exsist")
+```
+
+> [!tip] 建议使用抛异常来防止重复删除
+
