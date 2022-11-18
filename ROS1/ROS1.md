@@ -1596,3 +1596,213 @@ if __name__ == "__main__":
 
 > [!tip] 建议使用抛异常来防止重复删除
 
+#### ROS常用命令(bash)
+
+> 机器人系统中启动的节点少则几个，多则几十个，不同的节点名称各异，通信时使用的话题、服务、消息、参数等等都各不相同。**因此，ROS提供了一些实用的命令工具，可以用于获取不同的各类信息**
+
+> [!tip] [ROS WIKI 命令 直达车](http://wiki.ros.org/ROS/CommandLineTools)
+>> [!tip] 常用的各类命令：
+
+| 命令 | 作用 | 命令 | 作用 |
+| :---: | :---: | :---: | :---: |
+| rosnode | 操作节点 | rostopic | 操作话题 | 
+| rosservice | 操作服务 | rosmsg | 操作msg消息 |
+| rossrv | 操作srv信息 | rosparam | 操作参数 |
+
+- 注意：**ROS命令是动态的，可以动态获取想要的信息**
+
+##### rosnode
+
+- 用于获取节点信息命令
+
+```linux
+1. rosnode ping    测试到节点的连接状态
+2. rosnode list    列出活动节点
+3. rosnode info    打印节点信息
+4. rosnode machine 列出指定设备上节点
+5. rosnode kill    杀死某个节点
+6. rosnode cleanup 删除不可连接的节点
+```
+
+> [!todo] 单独使用rosnode，可以获得rosnode的使用提示
+
+```linux
+$ rosnode
+rosnode is a command-line tool for printing information about ROS Nodes.
+
+Commands:
+	rosnode ping	test connectivity to node
+	rosnode list	list active nodes
+	rosnode info	print information about node
+	rosnode machine	list nodes running on a particular machine or list machines
+	rosnode kill	kill a running node
+	rosnode cleanup	purge registration information of unreachable nodes
+
+Type rosnode <command> -h for more detailed usage, e.g. 'rosnode ping -h'
+```
+
+###### list
+
+```linux
+$ rosnode list
+/Listener
+/Talker
+/rosout
+```
+
+###### ping
+
+```linux
+$ rosnode ping /Listener
+rosnode: node is [/Listener]
+pinging /Listener with a timeout of 3.0s
+xmlrpc reply from http://ubuntu:37163/	time=7.288218ms
+xmlrpc reply from http://ubuntu:37163/	time=0.407696ms
+xmlrpc reply from http://ubuntu:37163/	time=0.546932ms
+xmlrpc reply from http://ubuntu:37163/	time=0.430822ms
+^Cping average: 2.168417ms
+```
+
+###### info
+
+```linux
+$ rosnode info /Listener
+--------------------------------------------------------------------------------
+Node [/Listener]    # 节点的名称
+Publications:       # 节点的发布信息 
+ * /rosout [rosgraph_msgs/Log]
+
+Subscriptions:      # 节点的订阅信息
+ * /topic [custom_msg/Person]
+
+Services:           # 节点的服务信息
+ * /Listener/get_loggers
+ * /Listener/set_logger_level
+
+
+contacting node http://ubuntu:37163/ ...
+Pid: 4560           # 节点的进程号
+Connections:        # 节点的连接信息
+ * topic: /rosout
+    * to: /rosout
+    * direction: outbound (43603 - 127.0.0.1:57446) [12]
+    * transport: TCPROS
+ * topic: /topic
+    * to: /Talker (http://ubuntu:45967/)
+    * direction: inbound (60076 - ubuntu:39099) [11]
+    * transport: TCPROS
+```
+
+###### machine
+
+- 在后面跟的是主机名
+
+```linux
+# ROS是分布式的
+$ rosnode machine ubuntu
+/Listener
+/Talker
+/rosout
+```
+
+###### kill
+
+```linux
+$ rosnode kill /Listner
+killing /Listener
+killed
+```
+
+![[rosnode kill.png]]
+
+###### cleanup
+
+```linux
+$ rosnode cleanup
+# 用于清除僵尸节点，因为没有僵尸节点，所以无法演示
+```
+
+##### rostopic
+
+> rostopic包含rostopic命令行工具，**用于显示有关ROS主题的调试信息**，还包括一个Python库，用于动态获取有关主题的信息并与之交互
+
+```linux
+1. rostopic bw     显示主题使用的宽带
+2. rostopic delay  显示带有header的主题延迟
+3. rostopic echo   打印信息到屏幕
+4. rostopic find   根据类型查找主题
+5. rostopic hz     显示主题的发布频率
+6. rostopic info   显示主题相关信息
+7. rostopic list   显示所有活动状态下的主题
+8. rostopic pub    将数据发布到主题
+9. rostopic type   打印主题类型
+```
+
+```linux
+$ rostopic
+rostopic is a command-line tool for printing information about ROS Topics.
+
+Commands:
+	rostopic bw	display bandwidth used by topic
+	rostopic delay	display delay of topic from timestamp in header
+	rostopic echo	print messages to screen
+	rostopic find	find topics by type
+	rostopic hz	display publishing rate of topic    
+	rostopic info	print information about active topic
+	rostopic list	list active topics
+	rostopic pub	publish data to topic
+	rostopic type	print topic or field type
+
+Type rostopic <command> -h for more detailed usage, e.g. 'rostopic echo -h'
+```
+
+###### rostopic list(-v)
+
+```linux
+$ rostopic list
+/rosout
+/rosout_agg
+/topic
+
+$ rostopic list -v
+Published topics:
+ * /rosout_agg [rosgraph_msgs/Log] 1 publisher
+ * /rosout [rosgraph_msgs/Log] 2 publishers
+ * /topic [custom_msg/Person] 1 publisher
+
+Subscribed topics:
+ * /rosout [rosgraph_msgs/Log] 1 subscriber
+ * /topic [custom_msg/Person] 1 subscriber
+```
+
+> [!warning] rostopic list -v显示详细信息，包括
+
+###### rostopic echo
+
+```linux
+rostopic echo topic
+name: "Lily"
+age: 1874
+height: 1.7300000190734863
+---
+name: "Lily"
+age: 1875
+height: 1.7300000190734863
+---
+name: "Lily"
+age: 1876
+height: 1.7300000190734863
+---
+```
+
+###### rostopic echo
+
+###### rostopic echo
+
+###### rostopic echo
+
+###### rostopic echo
+
+###### rostopic echo
+
+###### rostopic echo
