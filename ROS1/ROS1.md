@@ -1611,6 +1611,8 @@ if __name__ == "__main__":
 
 - 注意：**ROS命令是动态的，可以动态获取想要的信息**
 
+> [!fail] 以下命令，建议直接看最开始，后面的用法案例，全是垃圾
+
 ##### rosnode
 
 - 用于获取节点信息命令
@@ -1795,14 +1797,604 @@ height: 1.7300000190734863
 ---
 ```
 
-###### rostopic echo
+###### rostopic pub
 
-###### rostopic echo
+```linux
+$ rostopic pub topic custom_msg/Person "name: 'hehe'
+age: 18 
+height: 10" 
+publishing and latching message. Press ctrl-C to terminate
+```
 
-###### rostopic echo
+- 注意：使用Tab键进行补全，**格式必须严格为 key: value，键值对的冒号必须要空格**
+> [!tip] rostopic pub还可以控制发布频率
 
-###### rostopic echo
+```linux
+$ rostopic pub -r 10 topic custom_msg/Person "name: 'hehe'
+age: 18 
+height: 10" 
 
-###### rostopic echo
+# 控制在大约1秒10次
+```
 
-###### rostopic echo
+###### rostopic info
+
+```linux
+$ rostopic info topic 
+Type: custom_msg/Person                # Type是发布数据的类型
+
+Publishers:                            # 话题的发布方
+ * /Talker (http://ubuntu:33617/)
+
+Subscribers:                           # 话题的订阅方
+ * /Listener (http://ubuntu:38471/)
+```
+
+###### rostopic hz
+
+```linux
+$ rostopic hz topic
+subscribed to [/topic]
+no new messages
+average rate: 1.000
+	min: 1.000s max: 1.000s std dev: 0.00000s window: 2
+average rate: 1.000
+	min: 1.000s max: 1.000s std dev: 0.00015s window: 3
+average rate: 1.000
+	min: 1.000s max: 1.000s std dev: 0.00027s window: 4
+average rate: 1.000
+	min: 1.000s max: 1.000s std dev: 0.00026s window: 5
+average rate: 1.000
+	min: 0.999s max: 1.000s std dev: 0.00042s window: 6
+```
+
+###### rostopic find
+
+```linux
+$ rostopic find
+actionlib/                geometry_msgs/            std_msgs/
+actionlib_msgs/           map_msgs/                 stereo_msgs/
+actionlib_tutorials/      nav_msgs/                 tf/
+bond/                     pcl_msgs/                 tf2_msgs/
+controller_manager_msgs/  roscpp/                   theora_image_transport/
+control_msgs/             rosgraph_msgs/            trajectory_msgs/
+custom_msg/               rospy_tutorials/          turtle_actionlib/
+diagnostic_msgs/          sensor_msgs/              turtlesim/
+dynamic_reconfigure/      shape_msgs/               visualization_msgs/
+gazebo_msgs/              smach_msgs/
+```
+
+```linux
+$ rostopic find custom_msg/Person
+/topic
+```
+
+###### rostopic type
+
+```linux
+$ rostopic type topic
+custom_msg/Person
+```
+
+> [!warning] 和find刚好相反，find通过类型找话题，而type通过话题显示类型
+
+###### rostopic delay
+
+```linux
+$ rostopic delay topic
+subscribed to [/topic]
+[ERROR] [1668827497.070982]: msg does not have header
+[ERROR] [1668827498.070955]: msg does not have header
+[ERROR] [1668827499.071671]: msg does not have header
+```
+
+- **需要使用std_msgs中定义的Header类型才能够显示**
+
+##### rosservice
+
+> rosservice用于列出和查询ROS services命令
+
+| 命令 | 功能 | 命令 | 功能 |
+| :---: | :---: | :---: | :---: |
+| rosservice args | 打印参数服务器 | rosservice call | 使用提供的参数调用服务 |
+| rosservice find | 按照服务类型查询服务 | rosservice info | 打印有关服务的信息 |
+| rosservice list | 列出所有活动的服务 | rosservice type | 打印服务类型 |
+| rosservice uri | 打印服务的ROSRPC uri |
+
+```linux
+1. rosservice args   打印参数服务器 
+2. rosservice call   使用提供的参数调用服务
+3. rosservice find   按照服务类型查询服务 
+4. rosservice info   打印有关服务的信息
+5. rosservice list   列出所有活动的服务 
+6. rosservice type   打印服务类型
+7. rosservice uri    打印服务的ROSRPC uri
+```
+
+```linux
+$ rosservice
+Commands:
+	rosservice args	print service arguments
+	rosservice call	call the service with the provided args
+	rosservice find	find services by service type
+	rosservice info	print information about service
+	rosservice list	list active services
+	rosservice type	print service type
+	rosservice uri	print service ROSRPC uri
+
+Type rosservice <command> -h for more detailed usage, e.g. 'rosservice call -h'
+```
+
+###### rosservice list
+
+```linux
+$ rosserver list
+/client/get_loggers
+/client/set_logger_level
+/rosout/get_loggers
+/rosout/set_logger_level
+/server/get_loggers
+/server/set_logger_level
+/topic
+```
+
+###### rosservice call
+
+```linux
+$ rosservice call /topic "num1: 20
+num2: 10"
+sum: 30
+```
+
+###### rosservice info
+
+```linux
+$ rosservice info topic
+Node: /server
+URI: rosrpc://ubuntu:45487
+Type: server_comm/AddInts
+Args: num1 num2
+```
+
+##### rosmsg
+
+> rosmsg用于显示有关ROS消息类型信息的命令行工具
+
+```linux
+rosmsg is a command-line tool for displaying information about ROS Message types.
+
+Commands:
+	rosmsg show	Show message description
+	rosmsg info	Alias for rosmsg show
+	rosmsg list	List all messages
+	rosmsg md5	Display message md5sum
+	rosmsg package	List messages in a package
+	rosmsg packages	List packages that contain messages
+
+Type rosmsg <command> -h for more detailed usage
+```
+
+###### rosmsg list
+
+```linux
+actionlib/TestAction
+actionlib/TestActionFeedback
+actionlib/TestActionGoal
+actionlib/TestActionResult
+actionlib/TestFeedback
+actionlib/TestGoal
+actionlib/TestRequestAction
+actionlib/TestRequestActionFeedback
+actionlib/TestRequestActionGoal
+actionlib/TestRequestActionResult
+actionlib/TestRequestFeedback
+actionlib/TestRequestGoal
+actionlib/TestRequestResult
+actionlib/TestResult
+actionlib/TwoIntsAction
+```
+
+> [!tip] rosmsg list会将所有的消息类型显示，需要通过管道来筛选
+
+```linux
+$ rosmsg list | grep -i person
+custom_msg/Person
+```
+
+###### rosmsg show / info
+
+```linux
+# show和info是一样的
+$ rosmsg show custom_msg/Person 
+string name
+int32 age
+float32 heights
+
+$ rosmsg info custom_msg/Person 
+string name
+int32 age
+float32 heights
+```
+
+##### rossrv
+
+> rossrv用于显示有关ROS服务类型信息的命令行工具。**和rosmsg用法高度雷同**
+
+```linux
+$ rossrv
+rossrv is a command-line tool for displaying information about ROS Service types.
+
+Commands:
+	rossrv show	Show service description
+	rossrv info	Alias for rossrv show
+	rossrv list	List all services
+	rossrv md5	Display service md5sum
+	rossrv package	List services in a package
+	rossrv packages	List packages that contain services
+
+Type rossrv <command> -h for more detailed usage
+```
+
+> [!fail] 雷同还要我教？
+
+##### rosparam
+
+> rosparam与参数服务器相关，**用于使用YAML编码文件在参数服务器上获取和设置ROS参数**
+
+```linux
+$ rosparam is a command-line tool for getting, setting, and deleting parameters from the ROS Parameter Server.
+
+Commands:
+	rosparam set	set parameter
+	rosparam get	get parameter
+	rosparam load	load parameters from file
+	rosparam dump	dump parameters to file
+	rosparam delete	delete parameter
+	rosparam list	list parameter names
+```
+
+###### rosparam list
+
+```linux
+$ rosparam list
+/rosdistro
+/roslaunch/uris/host_ubuntu__44055
+/rosversion
+/run_id
+```
+
+###### rosparam set
+
+```linux
+$ rosparam set name Lily
+$ rosparam list
+/name
+/rosdistro
+/roslaunch/uris/host_ubuntu__44055
+/rosversion
+/run_id
+```
+
+###### rosparam get
+
+```linux
+$ rosparam get name
+Lily
+```
+
+###### rosparam delete
+
+```linux
+$ rosparam delete name
+$ rosparam list
+/rosdistro
+/roslaunch/uris/host_ubuntu__44055
+/rosversion
+/run_id 
+```
+
+###### rosparam dump
+
+```linux
+$ rosparam dump params.yaml
+$ ls
+build  devel  params.yaml  src
+$ cat params.yaml 
+rosdistro: 'noetic
+
+  '
+roslaunch:
+  uris:
+    host_ubuntu__44055: http://ubuntu:44055/
+rosversion: '1.15.14
+
+  '
+run_id: 09ee4968-67be-11ed-b873-977cb767672e
+```
+
+###### rosparam load 
+
+```yaml
+# 首先将params.yaml添加一些参数
+length: 0.45
+rosdistro: 'noetic
+
+  '
+roslaunch:
+  uris:
+    host_ubuntu__44055: http://ubuntu:44055/
+rosversion: '1.15.14
+
+  '
+run_id: 09ee4968-67be-11ed-b873-977cb767672e
+width: 0.95
+radius: 0.55
+```
+
+```linux
+$ roscore        # 重启核心，刷新参数
+$ rosparam list
+/rosdistro
+/roslaunch/uris/host_ubuntu__46291
+/rosversion
+/run_id
+$ rosparam load params.yaml 
+$ rosparam list
+/length
+/radius
+/rosdistro
+/roslaunch/uris/host_ubuntu__44055
+/roslaunch/uris/host_ubuntu__46291
+/rosversion
+/run_id
+/width
+```
+
+#### 通信机制实操
+
+> 结合ROS内置的turtlesim案例，使用上述所学
+
+##### 话题发布
+
+> [!todo] 需求：编码实现乌龟运动控制，让小乌龟做圆周运动
+
+- 实现分析：
+	- 关键节点：乌龟的显示节点turtlesim_node，乌龟的控制节点turtle_teleop_key
+		- 二者是通过订阅发布模式实现的
+	- 通过ros命令和计算图来获取turtle使用的话题和消息，才能自定义控制节点
+
+> [!example] 实现需要以下几步：
+> 1. node节点替换 -> 话题和消息
+> 2. 编码
+
+###### 话题与消息的获取
+
+> [!todo] 获取话题 /turtle1/cmd_vel
+
+- 使用计算图来获取
+
+```linux
+$ rqt_graph
+```
+
+![[获取话题.png]]
+
+- 使用rostopic list来获取
+
+```linux
+$ rostopic list
+/rosout
+/rosout_agg
+/turtle1/cmd_vel
+/turtle1/color_sensor
+/turtle1/pose
+```
+
+> [!todo] 获取消息载体 geometry_msgs/Twist
+
+- 使用rostopic info 获取
+
+```linux
+$ rostopic info /turtle1/cmd_vel 
+Type: geometry_msgs/Twist
+
+Publishers: 
+ * /teleop_turtle (http://ubuntu:33803/)
+
+Subscribers: 
+ * /turtlesim (http://ubuntu:39803/)
+```
+
+- 使用rostopic type 获取
+
+```linux
+$ rostopic type /turtle1/cmd_vel 
+geometry_msgs/Twist
+```
+
+> [!todo] 获取消息载体的格式
+
+- 使用rosmsg show 获取格式
+
+```linux
+$ rosmsg show geometry_msgs/Twist
+geometry_msgs/Vector3 linear
+  float64 x
+  float64 y
+  float64 z
+geometry_msgs/Vector3 angular
+  float64 x
+  float64 y
+  float64 z
+```
+
+- 解析：
+	- linear是线速度，只需要设置x
+	- angular是角速度，只需要设置z
+
+> [!tip] 消息格式的解析
+
+> 对于线速度来说 m/s
+>> x的值是纯粹的前进或后退的速度
+>> y的值是平移的速度
+>> y的值是垂直上升或下降的速度
+>
+> 对于角速度来说 rad/s (针对当前turtle模型)
+>> x的值对应的是翻转
+>> y的值对应的是俯仰
+>> z的值对应的是偏航
+
+![[角速度.png]]
+
+###### 实现发布节点
+
+```linux
+$ mkdir -p turtle_circle/src
+$ cd turtle_circle/
+[turtle_circle]$ catkin_make
+[turtle_circle]$ cd src/
+[turtle_circle/src]$ catkin_create_pkg turtle_run roscpp rospy std_msgs geometry_msgs turtlesim
+```
+
+> [!todo] 编写发布源文件
+
+```c++
+#include "ros/ros.h"
+#include "geometry_msgs/Twist.h"
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "my_control");
+    ros::NodeHandle nh;
+    ros::Publisher pub = nh.advertise<geometry_msgs::Twist>("/turtle1/cmd_vel", 10);
+    ros::Rate rate(10);
+
+	// 组织发布信息格式
+    geometry_msgs::Twist twist;
+    twist.linear.x = 1.0;        // 只允许前进和后退
+    twist.linear.y = 0.0;
+    twist.linear.z = 0.0;
+    twist.angular.x = 0.0;
+    twist.angular.y = 0.0;
+    twist.angular.z = 0.5;       // 只允许偏移
+
+    while (ros::ok()) {
+        pub.publish(twist);
+        rate.sleep();
+        ros::spinOnce();
+    } 
+    return 0;
+}
+```
+
+##### 话题订阅
+
+> [!todo] 要求控制乌龟运动时，实时打印当前乌龟的位姿。
+
+- 实现分析：
+	- 通过ROS命令获取乌龟位姿发布的话题和消息
+	- 编写订阅节点，打印乌龟位姿
+
+###### 话题与消息的获取
+
+> [!todo] 获取话题 /turtle1/pose
+
+```linux
+$ rostopic list
+
+$ rqt_gragh
+```
+
+> [!todo] 获取信息类型 turtlesim/Pose
+
+```linux
+$ rostopic type /turtle1/pose
+```
+
+> [!todo] 获取消息类型的格式
+
+```linux
+$ rosmsg show turtlesim/Pose 
+float32 x
+float32 y
+float32 theta                  # 偏置角，或者说朝向
+float32 linear_velocity        # 线速度
+float32 angular_velocity       # 角速度
+```
+
+###### 实现订阅节点
+
+> [!todo] 编写源文件前的准备工作，添加launch
+
+```linux
+[../src/turtle_run]$ mkdir launch
+[../src/turtle_run]$ cd launch
+[../turtle_run/launch]$ touch start_turtle.launch
+```
+
+> [!todo] 编写launch文件
+
+```launch
+<!-- start the turtle GUI and keybroad control node -->
+<launch>
+    <!-- turtle GUI node start -->
+    <node pkg="turtlesim" type="turtlesim_node" name="turtle1" output="screen" />
+    <!-- keybroad control start node -->
+    <node pkg="turtlesim" type="turtle_teleop_key" name="key" output="screen" />
+</launch>
+```
+
+> [!todo] 启动launch文件
+
+```linux
+$ source ./devel/setup.bash
+$ roslaunch turtle_run start_turtle.launch
+```
+
+> [!todo] 编写配置文件packages.xml和CMakeLists.txt，因为有自定义的消息包
+
+- **如果在创建包之前，catkin_create添加了turtlesim依赖，就不再需要编写package.xml和CMakeLists.txt。反之，则需要自行添加如下信息**
+
+```xml
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>turtlesim</build_depend>
+  
+  <build_export_depend>geometry_msgs</build_export_depend>
+  <build_export_depend>turtlesim</build_export_depend>
+  
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>turtlesim</exec_depend>
+```
+
+```CMakeLists.txt
+find_package(catkin REQUIRED COMPONENTS
+  geometry_msgs
+  roscpp
+  rospy
+  std_msgs
+  turtlesim
+)
+```
+
+> [!todo] 编写订阅源文件
+
+- 注意：
+	- **必须在运行订阅前，启动turtlesim_node 和 turtle_teleop_key**
+	- catkin_create的依赖必须要有turtlesim
+
+```c++
+#include "ros/ros.h"
+#include "turtlesim/Pose.h"
+
+void doPose(const turtlesim::Pose::ConstPtr& pose) {
+    ROS_INFO("turtle's \npoint (%.2f, %.2f)\ntheta (%.2f)\nlinear_v (%.2f)\nangular_v (%.2f)", 
+            pose->x, pose->y, pose->theta, pose->linear_velocity, pose->angular_velocity);
+}
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "sub_pose");
+    ros::NodeHandle nh;
+    ros::Subscriber sub = nh.subscribe("/turtle1/pose", 100, doPose);
+    ros::spin();
+    return 0;
+}
+```
