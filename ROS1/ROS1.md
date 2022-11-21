@@ -2398,3 +2398,158 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 ```
+
+##### 服务调用
+
+> [!todo] 需求：编码实现向turtlesim发送请求，在窗体的指定位置生成乌龟。
+
+- 实现分析：
+	- 需要启动乌龟显示节点
+	- 通过ROS命令，获取乌龟生成的服务名称和服务消息类型
+	- 编写代码，生成乌龟
+
+###### 服务名称与消息的获取
+
+> [!todo] 获取话题 /spawn
+
+```linux
+$ rosservice list
+/clear
+/kill
+/reset
+/rosout/get_loggers
+/rosout/set_logger_level
+/spawn
+/turtle1/set_pen
+/turtle1/teleport_absolute
+/turtle1/teleport_relative
+/turtlesim/get_loggers
+/turtlesim/set_logger_level
+```
+
+> [!todo] 获取消息类型 /turtlesim/Spawn
+
+```linux
+$ rosservice type /spawn 
+turtlesim/Spawn
+```
+
+> [!todo] 获取消息格式
+
+```linux
+$ rossrv show turtlesim/Spawn 
+float32 x
+float32 y
+float32 theta
+string name
+---
+string name
+```
+
+###### 实现服务节点
+
+- **和之前一样，如果在catkin_create时添加了geometry_msgs依赖，就不需要再更改配置文件**
+
+> [!todo] 编写服务节点源文件
+
+```c++
+#include "ros/ros.h"
+#include "turtlesim/Spawn.h"
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "turtle_clien");
+    ros::NodeHandle nh;
+    ros::ServiceClient client = nh.serviceClient<turtlesim::Spawn>("/spawn");
+
+    turtlesim::Spawn spawn;
+    spawn.request.x = 1.0;
+    spawn.request.y = 4.0;
+    spawn.request.theta = 1.57;
+    spawn.request.name = "turtle_2";
+
+	// 下面两个API，是为了确定服务已经启动
+    // ros::service::waitForService("/spawn");
+    client.waitForExistence();
+
+    if (client.call(spawn)) {
+        ROS_INFO("turtle create successfully, name: %s", spawn.response.name.c_str());
+    }else {
+        ROS_INFO("turtle create failed");
+    }
+    
+    return 0;
+}
+```
+
+> [!warning] 乌龟的名字是唯一的，因此该程序只能运行一次，否则要重新开启turtlesim_node
+
+```linux
+[ INFO] [1668913651.928413089]: Spawning turtle [turtle_2] at x=[1.000000], y=[4.000000], theta=[1.570000]
+[ERROR] [1668913803.729898438]: A turtled named [turtle_2] already exists
+```
+
+##### 参数设置
+
+> [!todo] 需求：修改turtlesim乌龟窗体的背景色。**背景色是通过参数服务器的方式以rgb方式设置的**
+
+- 实现分析：
+	- 通过ROS命令获取参数服务器中设置背景色的参数
+	- 编写参数节点，修改参数值
+
+###### 参数名和值的获取
+
+> [!todo] 获取参数名和值
+
+```linux
+$ rosparam list
+/turtlesim/background_b
+/turtlesim/background_g
+/turtlesim/background_r
+
+$ rosparam get /turtlesim/background_b 
+255
+$ rosparam get /turtlesim/background_g 
+86
+$ rosparam get /turtlesim/background_r
+69
+```
+
+> [!warning] 通过rosparam set修改完参数值后，需要重启turtlesim_node，且不能关闭roscore
+
+###### 实现参数修改
+
+> [!todo] 编写参数源文件 -- param::set
+
+```c++
+#include "ros/ros.h"
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "change_color");
+
+    ros::param::set("/turtlesim/background_b", 0);
+    ros::param::set("/turtlesim/background_g", 0);
+    ros::param::set("/turtlesim/background_r", 0);
+    return 0;
+}
+```
+
+![[乌龟背景参数1.png]]
+
+> [!todo] 编写参数源文件 -- NodeHandle::setParam
+
+```c++
+#include "ros/ros.h"
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "change_color");
+    ros::NodeHandle nh("turtlesim");             // 绑定turtlesim节点
+
+    nh.setParam("/turtlesim/background_b", 255);
+    nh.setParam("/turtlesim/background_g", 255);
+    nh.setParam("/turtlesim/background_r", 255);
+    return 0;
+}
+```
+
+![[乌龟背景参数2.png]]
+
