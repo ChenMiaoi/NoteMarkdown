@@ -2553,3 +2553,178 @@ int main(int argc, char* argv[]) {
 
 ![[乌龟背景参数2.png]]
 
+#### 通信机制比较
+
+> 三种服务器中，参数服务器是一种数据共享机制，可以在不同的节点之间共享数据，话题通信和服务通信是在不同节点之间传递数据的。
+
+> [!todo] 其中，话题通信和服务通信有着相似性和差异性：
+> 1. 消息的发布方/客户端(Publisher/Client)
+> 2. 消息的订阅方/服务端(Subscriber/Server)
+> 3. 话题名称(Topic/Service)
+> 4. 数据载体(msg/srv)
+
+- 对于二者的差异性：
+
+| | Topic(话题) | Service(服务) |
+| :---: | :---: | :---: |
+| 通信模式 | 发布/订阅 | 请求/响应 |
+| 同步性 | 异步 | 同步 | 
+| 底层协议 | ROSTCP/UDP | ROSTCP/UDP | 
+| 缓冲区 | 有 | 无 | 
+| 实时性 | 弱 | 强 | 
+| 节点关系 | 多对多 | 一对多(一个Server) | 
+| 通信数据 | msg | srv | 
+| 使用场景 | 连续高频的数据发布与接受：雷达、里程计 | 偶尔调用或执行某一项特定功能：拍照或语音识别 |
+
+- **不同的通信机制都有一定的互补性，都有各自适应的应用场景**。
+- 什么是异步：
+	- 不等任务执行完，直接执行下一个任务。
+- 什么是同步：
+	- 一定要等任务执行完了，得到结果，才执行下一个任务。
+- 缓冲区：
+	- 在这里的缓冲区指的是消息队列长度。~~不清楚是行缓冲还是全缓冲~~，但是如果队列满了，采取的是清空队列，先进的先被清空
+
+### ROS的进阶通信机制
+
+> ROS通信的进阶操作，内容偏向粗粒度的通信框架讲解
+>> 1. ROS常用API
+>> 2. ROS的自定义头文件与源文件的配置
+
+#### 常用API
+
+> 首先，建议参考官方API文档
+>> --> [官方API文档链接直达车](http://wiki.ros.org/APIs)
+>> --> [官方API文档链接直达车](https://docs.ros.org/en/api/roscpp/html)
+
+> [!example] 本章会涉及到的API内容：
+> 1. ROS节点初始化相关API
+> 2. NodeHandle的基本使用API
+> 3. 话题的发布方，订阅方对象相关API
+> 4. 服务的服务端，客户端对象相关API
+> 5. 时间相关API
+> 6. 日志输出相关API
+
+##### 初始化
+
+```c++
+/** @brief ROS初始化函数
+	*
+	* 该函数可以解析并使用节点启动时传入的参数(通过参数设置节点名称，命名空间...)
+	*
+	* 该函数有多个重载版本，如果需要配合NodeHandle建议调用如下版本
+	*
+	* \param argc 参数个数
+	* \param argv 参数列表
+	* \param name 节点名称，需要保证其唯一性，不允许包含命名空间
+	* \param options 节点启动选项，被封装进了ros::init_options
+	*
+*/
+void init(int& argc, char** argv, const std::string& name, uint32_t options = 0);
+```
+
+- argc和argv：
+	- 通过ROS特定语法，可以设置参数服务器
+
+```linux
+[bash1]$ rosrun topic_comm demo01_pub _length:=10
+[bash2]$ rosparam list
+/Takler/length
+/rosdistro
+/roslaunch/uris/host_ubuntu__39825
+/rosversion
+/run_id
+
+[bash2]$ rosparam get /Takler/length 
+10
+```
+
+- **可以看见，通过_key:=value能够设置参数服务器**
+
+- options：
+	- 节点名称需要保证唯一性，这使得同一个节点无法重复启动。**ROS中的同名节点启动，那么之前的节点会被关闭**。
+	- options设置命名空间的存在，能够使得一个节点多次启动
+
+```c++
+ros::init(argc, argv, "name", ros::init_options::AnonymousName);
+```
+
+- ros::init_options::AnonymousName工作机制：
+	- 每次运行的时候，如果设置了options参数，那么会自动给name后面添加一个随机数作为节点名称，**且该随机数不会与之前的重复**
+
+```c++
+enum InitOption
+{
+  /**
+   * Don't install a SIGINT handler.  You should install your own SIGINT handler in this
+   * case, to ensure that the node gets shutdown correctly when it exits.
+   */
+  NoSigintHandler = 1 << 0,
+  /** \brief Anonymize the node name.  Adds a random number to the end of your node's name, to make it unique.
+   */
+  AnonymousName = 1 << 1,
+  /**
+   * \brief Don't broadcast rosconsole output to the /rosout topic
+   */
+  NoRosout = 1 << 2,
+};
+
+typedef init_options::InitOption InitOption;
+
+```
+
+##### 话题与服务相关对象
+
+> 在roscpp中，**话题与服务的相关对象一般由NodeHandle创建**
+>> NodeHandle可以用于设置命名空间，但目前暂不介绍
+
+###### 发布对象
+
+```c++
+  /**
+     * \brief 创建发布者对象
+     *
+     * \param topic Topic to advertise on
+     *
+     * \param queue_size Maximum number of outgoing messages to be
+     * queued for delivery to subscribers
+     *
+     * \param latch (optional) If true, the last message published on
+     * this topic will be saved and sent to new subscribers when they
+     * connect(如果设置为true，那么发布的最后一条消息会被保存，直到再次连接，然后发送这条保存的消息给新的订阅者)
+     *
+     * \return On success, a Publisher that, when it goes out of scope,
+     * will automatically release a reference on this advertisement.  On
+     * failure, an empty Publisher.
+     *
+     * \throws InvalidNameException If the topic name begins with a
+     * tilde, or is an otherwise invalid graph resource name, or is an
+     * otherwise invalid graph resource name
+*/
+template <class M>
+Publisher advertise(const std::string& topic, uint32_t queue_size, bool latch = false) {
+  AdvertiseOptions ops;
+  ops.template init<M>(topic, queue_size);
+  ops.latch = latch;
+  return advertise(ops);
+}
+```
+
+- 为什么有latch(锁存器)参数：
+	- 例如在导航中，需要发送静态的地图，如果每次都以10hz发送，是极其消耗资源的，而设置latch后，将地图存储，然后只需要发送一次即可。
+
+```c++
+ros::Publisher pub = nh.advertise<std_msgs::String>("topic", 10, true);
+
+if (count <= 10) {
+	std::string ss = "hello ---> ";
+	ss += std::to_string(count);
+	msg.data = ss.c_str();
+	pub.publish(msg);
+	ROS_INFO("The pub data: %s", ss.c_str());
+}
+rate.sleep();   
+count++;
+```
+
+![[ROS latch参数的作用.png]]
+
