@@ -1,6 +1,9 @@
 # ROS学习
 
 --- 
+> [!tip] 本文的学习基于赵虚左老师的讲义与视频，感谢赵虚左老师的无私奉献。
+
+- **[【Autolabor初级教程】ROS机器人入门 视频链接](https://www.bilibili.com/video/BV1Ci4y1L7ZZ?p=1&vd_source=a732951de20d22319ac615ded3090bf1)**
 
 ## ROS的安装与配置
 
@@ -2727,4 +2730,798 @@ count++;
 ```
 
 ![[ROS latch参数的作用.png]]
+
+###### 发布消息
+
+```c++
+/**
+* 发布消息          
+*/
+template <typename M>
+void publish(const M& message) const;
+
+template <typename M>
+void publish(const boost::shared_ptr<M>& message) const;
+```
+
+###### 订阅对象
+
+```c++
+/**
+	* \brief 生成某个话题的订阅对象
+	*
+	* 该函数将根据给定的话题在ROS master 注册，并自动连接相同主题的发布方，每接收到一条消息，都会调用回调
+	* 函数，并且传入该消息的共享指针，该消息不能被修改，因为可能其他订阅对象也会使用该消息。
+	*
+	* \param M [template] M 是指消息类型
+	* \param topic 订阅的话题
+	* \param queue_size 消息队列长度，超出长度时，头部的消息将被弃用
+	* \param fp 当订阅到一条消息时，需要执行的回调函数
+	* \param transport_hints a TransportHints structure which defines various transport-related options
+	* \return 调用成功时，返回一个订阅者对象，失败时，返回空对象
+	* 
+*/
+template<class M>
+Subscriber subscribe(
+	const std::string& topic, 
+	uint32_t queue_size, void(*fp)(const boost::shared_ptr<M const>&), 
+	const TransportHints& transport_hints = TransportHints()
+)
+```
+
+###### 服务对象
+
+```c++
+/**
+	* \brief 生成服务端对象
+	*
+	* 该函数可以连接到 ROS master，并提供一个具有给定名称的服务对象。
+	*
+	* \param service 服务的主题名称
+	* \param srv_func 接收到请求时，需要处理请求的回调函数
+	* \return 请求成功时返回服务对象，否则返回空对象:
+*/
+template<class MReq, class MRes>
+ServiceServer advertiseService(
+	const std::string& service, 
+	bool(*srv_func)(MReq&, MRes&)
+)
+```
+
+###### 客户端对象
+
+```c++
+/** 
+	* @brief 创建一个服务客户端对象
+	*
+	* 当清除最后一个连接的引用句柄时，连接将被关闭。
+	*
+	* @param service_name 服务主题名称
+	* @param persistent Whether this connection should persist.  Persistent services keep the connection to the remote host active so that subsequent calls will happen faster.  In general persistent services are discouraged, as they are not as robust to node failure as non-persistent services.
+	* @param header_values Key/value pairs you'd like to send along in the connection handshake
+  */
+ template<class Service>
+ ServiceClient serviceClient(
+	 const std::string& service_name, 
+	 bool persistent = false, 
+	 const M_string& header_values = M_string()
+)
+```
+
+###### 等待函数一
+
+```c++
+/**
+	* ros::service::waitForService("addInts");
+	* \brief 等待服务可用，否则一致处于阻塞状态
+	* \param service_name 被"等待"的服务的话题名称
+	* \param timeout 等待最大时常，默认为 -1，可以永久等待直至节点关闭
+	* \return 成功返回 true，否则返回 false。
+*/
+ROSCPP_DECL bool waitForService(
+	const std::string& service_name, 
+	ros::Duration timeout = ros::Duration(-1)
+);
+```
+
+###### 等待函数二
+
+```c++
+/**
+	* client.waitForExistence();
+	* \brief 等待服务可用，否则一致处于阻塞状态
+	* \param timeout 等待最大时常，默认为 -1，可以永久等待直至节点关闭
+	* \return 成功返回 true，否则返回 false。
+*/
+bool waitForExistence(ros::Duration timeout = ros::Duration(-1));
+```
+
+##### 回旋函数
+
+```c++
+/**
+	* \brief Process a single round of callbacks.
+	*
+	* This method is useful if you have your own loop running and would like to process
+	* any callbacks that are available.  This is equivalent to calling callAvailable() on the
+	* global CallbackQueue.  It will not process any callbacks that have been assigned to
+	* custom queues.
+*/
+ROSCPP_DECL void spinOnce();
+```
+
+```c++
+/** \brief Enter simple event loop
+	*
+	* This method enters a loop, processing callbacks.  This method should only be used
+	* if the NodeHandle API is being used.
+	*
+	* This method is mostly useful when your node does all of its work in
+	* subscription callbacks.  It will not process any callbacks that have been assigned to
+	* custom queues.
+	*
+*/
+ROSCPP_DECL void spin();
+```
+
+- 注意：
+	- spinOnce仅能处理一轮回调，所以在spinOnce之后的代码是能够继续运行的。**而spin不行，因为spin会一直回调**
+
+##### 时间
+
+###### 时刻
+
+> 获取时刻，设置时间
+
+> [!todo] 需求：获取当前时刻，设置指定时刻
+
+```c++
+#include "ros/ros.h"
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "timer");
+    ros::NodeHandle nh;                 // 在调用API前，必须声明句柄，否则后续API无效
+
+    ros::Time right_now = ros::Time::now();
+    ROS_INFO("right now time: %.2f", right_now.toSec());
+    ROS_INFO("right now time: %d", right_now.sec);
+
+    ros::Time t1(20, 45415465);
+    ros::Time t2(1235.15);
+    ROS_INFO("t1 = %.2f", t1.toSec());
+    ROS_INFO("t2 = %.2f", t2.toSec());
+    return 0;
+}
+```
+
+> [!warning] 时间的参考系使用格林威治时间
+
+- ros::Time
+
+```c++
+	Time()
+      : TimeBase<Time, Duration>()
+    {}
+
+    Time(uint32_t _sec, uint32_t _nsec)
+      : TimeBase<Time, Duration>(_sec, _nsec)
+    {}
+
+    explicit Time(double t) { fromSec(t); }
+```
+
+###### 持续时间
+
+> [!todo] 需求：程序执行停顿五秒
+
+```c++
+#include "ros/ros.h"
+
+int main(int argc, char *argv[]) {
+    ros::init(argc, argv, "during");
+    ros::NodeHandle nh;
+
+    ros::Time start = ros::Time::now();
+    ROS_INFO("start process");
+    ros::Duration d1(5);
+    d1.sleep();
+    ROS_INFO("end process");
+    ros::Time end = ros::Time::now();
+    ROS_INFO("the total time: %.2f", end.toSec() - start.toSec());
+    return 0;
+}
+```
+
+- ros::Duration
+
+```c++
+	Duration()
+		: DurationBase<Duration>()
+		{ }
+	
+	Duration(int32_t _sec, int32_t _nsec)
+		: DurationBase<Duration>(_sec, _nsec)
+		{}
+	
+	explicit Duration(double t) { fromSec(t); }
+	explicit Duration(const Rate&);
+```
+
+###### 设置运行频率
+
+```c++
+class ROSTIME_DECL Rate
+{
+public:
+	/**
+	* @brief  Constructor, creates a Rate
+	* @param  frequency The desired rate to run at in Hz
+	*/
+	Rate(double frequency);
+	explicit Rate(const Duration&);
+	
+	/**
+	* @brief  Sleeps for any leftover time in a cycle. Calculated from the last time sleep, reset, or the constructor was called.
+	* @return True if the desired rate was met for the cycle, false otherwise.
+	*/
+	bool sleep();
+```
+
+###### 定时器
+
+> [!todo] 需求：每隔一秒钟，在控制台输出文本
+
+```c++
+#include "ros/ros.h"
+
+void doThing(const ros::TimerEvent& event) {
+    ROS_INFO("Timer start");
+}
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "settingTimer");
+    ros::NodeHandle nh;
+    ros::Timer timer = nh.createTimer(ros::Duration(1), doThing);
+    ros::spin();
+    return 0;
+}
+```
+
+```c++
+ /**
+	* \brief Create a timer which will call a callback at the specified rate.  This variant takes
+	* anything that can be bound to a Boost.Function, including a bare function
+	*
+	* When the Timer (and all copies of it) returned goes out of scope, the timer will automatically
+	* be stopped, and the callback will no longer be called.
+	*
+	* \param period The period at which to call the callback
+	* \param callback The function to call
+	* \param oneshot If true, this timer will only fire once
+	* \param autostart If true (default), return timer that is already started
+*/
+Timer createTimer(
+	Duration period, 
+	const TimerCallback& callback, 
+	bool oneshot = false,
+	bool autostart = true
+) const;
+```
+
+- 参数onshot如果设置为true，那么不会一直循环执行，只会执行一次。
+- 参数autostart如果设置为true，那么需要调用.start()方法来手动启动
+
+- ros::TimerEvent
+`
+```c++
+/**
+ * \brief Structure passed as a parameter to the callback invoked by a ros::Timer
+ */
+struct TimerEvent {
+	Time last_expected;                     
+	///< In a perfect world, this is when the last callback should have happened
+	Time last_real;                         
+	///< When the last callback actually happened
+	Time last_expired;                      
+	///< When the last timer actually expired and the callback was added to the queue
+	
+	Time current_expected;                  
+	///< In a perfect world, this is when the current callback should be happening
+	Time current_real;                     
+	 ///< This is when the current callback was actually called (Time::now() as of the beginning of the callback)
+	Time current_expired;                   
+	///< When the current timer actually expired and the callback was added to the queue
+
+	struct {
+		WallDuration last_duration;           
+		///< How long the last callback ran for
+	} profile;
+};
+```
+
+##### 日志输出
+
+| 等级 | 作用 |
+| :---: | :---: | 
+| DEBUG(调试) | 只在调试的时候使用，该信息不会输出到控制到 |
+| INFO(信息) | 标准信息，一般用于说明系统内部正在执行的操作(白色字体) |
+| WARN(警告) | 提醒一些异常情况，但程序仍可进行(黄色字体) |
+| ERROR(错误) | 提示错误信息，此类错误会影响程序运行(红色字体) |
+| FATAL(致命错误) | 此类错误会组织节点继续运行(红色字体) |
+
+![[LOG.png]]
+
+#### 自定义文件
+
+> [!todo] ROS中自定义头文件的使用，**核心在于如何配置CMakeLists.txt**
+
+##### 自定义头文件的调用
+
+> [!todo] 需求：设计头文件，可执行文件作为源文件
+
+- 实现流程：
+	- 1. 编写头文件
+	- 2. 编写可执行文件(源文件)
+	- 3. 编辑配置文件并执行
+
+###### 编写头文件
+
+> [!todo] **在功能包中的include/功能包目录下编写自己的头文件**
+
+```c++
+#ifndef __TEST_HEADER_H_
+#define __TEST_HEADER_H_
+
+namespace hello_ros {
+    class MyHello {
+    public:
+        void run();
+    };
+} // namespace hello_ro 
+
+#endif // !__TEST_HEADER_H_
+```
+
+###### 编写源文件(可执行文件)
+
+> [!warning] 注意：需要向c_cpp_propreties.json中添加头文件路径，但是如果你已经创建好包再使用Vsc编程，就可以不需要，因为会自动检索加入
+
+```c++
+#include "ros/ros.h"
+#include "custom/test_header.h"
+
+namespace hello_ros {
+    void MyHello::run() {
+        ROS_INFO("process running...");
+    }
+} // namespace hello_ros
+
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "header");
+    hello_ros::MyHello myHello;
+    myHello.run();
+    return 0;
+}
+```
+
+###### 编写配置文件
+
+```CMakeLists.txt
+include_directories(
+# include
+  ${catkin_INCLUDE_DIRS}
+)
+
+# 第一步，将include的注释放开
+include_directories(
+include
+  ${catkin_INCLUDE_DIRS}
+)
+
+# add_executable(${PROJECT_NAME}_node src/custom_node.cpp)
+
+# 第二步，取消注释，按照以前的样式修改
+add_executable(test_header src/test_header.cc)
+
+# add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+# 第三步，取消注释，将${PROJECT_NAME}_node修改为需要执行的名称
+add_dependencies(test_header ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+# target_link_libraries(${PROJECT_NAME}_node
+#   ${catkin_LIBRARIES}
+# )
+
+# 第四步，取消注释，按照以前的修改
+target_link_libraries(test_header
+  ${catkin_LIBRARIES}
+)
+```
+
+> [!fail] 注意：add_executable必须在第一位，后面两步无顺序之分，add_dependencies
+
+##### 自定义源文件的调用
+
+> [!todo] 需求：设计头文件于源文件，在可执行文件中包含头文件
+
+- 实现流程：
+	- 1. 编写头文件
+	- 2. 编写源文件
+	- 3. 编写可执行文件
+	- 4. 编辑配置文件并执行
+
+###### 编写头文件
+
+> [!todo] 和上面没差别
+
+```c++
+#ifndef __TEST_HEADER_H_
+#define __TEST_HEADER_H_
+
+#include "ros/ros.h"
+
+namespace hello_ros {
+    class MyHello {
+    public:
+        void run();
+    };
+} // namespace hello_ro 
+
+#endif // !__TEST_HEADER_H_
+```
+
+###### 编写源文件
+
+```c++
+#include "source_test/test_header.h"
+
+namespace hello_ros {
+    void MyHello::run() {
+        ROS_INFO("The source file's hello");
+    }
+}
+```
+
+> [!warning] 值得注意的是，上面的流程和正常的分文件编写流程一致
+
+###### 编写可执行文件
+
+```c++
+#include "source_test/test_header.h"
+
+int main(int argc, char* argv[]) {
+    ros::init(argc, argv, "source");
+    hello_ros::MyHello hello;
+    hello.run();
+    return 0;
+}
+```
+
+###### 编写配置文件
+
+> [!todo] 在CMakeLists.txt文件中进行相应的配置，**此处仅针对头文件和对应实现的配置**
+
+```CMakeLists.txt
+include_directories(
+# include
+  ${catkin_INCLUDE_DIRS}
+)
+
+# 第一步，取消include的注释
+include_directories(
+include
+  ${catkin_INCLUDE_DIRS}
+)
+
+## Declare a C++ library
+# add_library(${PROJECT_NAME}
+#   src/${PROJECT_NAME}/source_test.cpp
+# )
+
+# 第二步，因为自己写了一个头文件，那么需要加入依赖库，并且加入自己的头文件和对应的实现文件
+## Declare a C++ library
+add_library(hello_header
+  include/${PROJECT_NAME}/test_header.h
+  src/test_source.cc
+)
+
+# add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+# 第三步，添加所需依赖
+add_dependencies(hello_header ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+# target_link_libraries(${PROJECT_NAME}_node
+#   ${catkin_LIBRARIES}
+# )
+
+# 第四步，链接所需的库
+target_link_libraries(hello_header
+  ${catkin_LIBRARIES}
+)
+```
+
+> [!warning] 尽量使这几个更改的名字，是一致的，否则可能出现意外的错误。**且，对于可执行文件的名字，和这些名字不同**，~~当然，只是建议，喜欢作死也没事~~
+
+> [!todo] 编写CMakeLists.txt配置文件，**此处仅针对可执行文件**
+
+```CMakeLists.txt
+# add_executable(${PROJECT_NAME}_node src/source_test_node.cpp)
+add_executable(use_source src/use_source.cc)
+
+# add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(use_source ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+# target_link_libraries(${PROJECT_NAME}_node
+#   ${catkin_LIBRARIES}
+# )
+target_link_libraries(use_source
+  hello_header
+  ${catkin_LIBRARIES}
+)
+```
+
+> [!fail] 注意，在target_link_libraries的时候，需要将我们上面生成的库链接进来
+
+### ROS运行管理
+
+> ROS是多进程(节点)的分布式框架，一个完整的ROS实现：
+>> 1. 可能包含多台主机
+>> 2. 每台主机上又有很多个工作空间(workspace)
+>> 3. 每个的工作空间中又包含多个功能包(package)
+>> 4. 每个功能包又包含多个节点(Node)，不同的节点都有自己的名称
+>> 5. 每个节点可能还会设置一个或多个话题(topic)
+>> 6. ...
+
+![[ROS运行管理.png]]
+
+- 当工程量大且层级较深时，维护代码就是一个重要的需求：
+	- 1. 如何关联不同的工作包
+	- 2. 如何启动繁多的ROS节点
+	- 3. 功能包、节点、话题、参数重名等该如何处理
+	- 4. 不同主机上的节点如何通信
+
+#### 元功能包
+
+> MetaPackage(元功能包)是Linux的一个文件管理系统概念，是ROS中的一个虚包，里面没有实质内容，但是他可以依赖其他软件包，并将其组合。
+
+##### 元功能包的实现
+
+###### 创建一个新的功能包
+
+> [!warning] 注意：创建功能包的时候，不需要添加任何依赖！
+
+###### 配置package.xml
+
+```xml
+	<!-- 第一步，在<buildtool_depend>catkin</buildtool_depend>下方添加自己想要加入的功能包 -->
+	<buildtool_depend>catkin</buildtool_depend>
+	<exec_depend>custom</exec_depend>
+	<exec_depend>source_test</exec_depend>
+
+	<!-- 第二步，在<export>标签中声明metapackage -->
+	<export>
+		<!-- Other tools can request additional information be placed here -->
+		<metaPackage/>
+	</export>
+```
+
+###### 配置CMakeLists.txt
+
+> [!fail] CMakelLists.txt中不允许有空行存在
+
+```CMakeLists.txt
+# 第一步，删除所有注释，只保留前三行有用的关键信息
+cmake_minimum_required(VERSION 3.0.2)
+project(metaPackage)
+find_package(catkin REQUIRED)
+
+# 第二步，在第四行加上catkin_metapackage()，然后执行，如果执行无误，则说明之前的步骤没有错误
+cmake_minimum_required(VERSION 3.0.2)
+project(metaPackage)
+find_package(catkin REQUIRED)
+catkin_metapackage()
+```
+
+- **[官方关于matepackage的Wiki](http://wiki.ros.org/catkin/package.xml#Metapackages)
+
+#### ROS节点管理launch
+
+> 使用roslaunch命令集合launch文件启动管理节点。
+
+- 基本概念
+	- launch文件是一个XML格式的文件，可以启动本地和远程的多个节点，还可以在参数服务器中设置参数
+- 作用
+	- 简化节点的配置和启动，提高ROS程序的启动效率
+
+> [!todo] 案例：使用turtlesim
+
+- 创建launch文件
+
+> [!tip] 需要在功能包目录下新建launch文件夹来保存launch文件
+
+```launch
+<launch>
+    <node pkg="turtlesim" type="turtlesim_node" name="my_turtle" output="screen" />
+    <node pkg="turtlesim" type="turtle_teleop_key" name="my_key" output="screen" />
+</launch>
+```
+
+- 调用launch文件
+
+> [!tip] 需要catkin_make之后source环境变量之后运行
+
+```linux
+$ roslaunch pkg xxx.launch
+```
+
+###### 文件标签 -> launch标签
+
+> [!todo] launch标签是所有launch文件的根标签，充当其他标签的容器
+
+- 属性
+	- **deprecated = "弃用声明"**，告知用户该launch文件已经弃用
+- 子级标签
+	- 所有的其他标签都是launch的子级
+
+```launch
+<launch deprecated="This is dumped file">
+    <node pkg="turtlesim" type="turtlesim_node" name="my_turtle" output="screen" />
+    <node pkg="turtlesim" type="turtle_teleop_key" name="my_key" output="screen" />
+</launch>
+```
+
+###### 文件标签 -> node标签
+
+> \<node>标签用于指定ROS节点，是最常见的标签
+>> **值得注意的是：roslaunch命令不能保证按照node的声明顺序来启动节点(节点的启动是多进程的)**
+
+- 属性
+	- pkg = "pkg_name"，节点所属的包
+	- type = "node_type"，节点类型(与之相同名称的可执行文件)
+	- name = "node_name"，节点名称(在ROS网络拓扑中节点的名称)
+	- args = "xxx"(可选)，将参数传递给节点
+	- machine = "machine_name"，在指定机器上启动节点
+	- respawn = "true | false"(可选)，如果节点断开，是否自动重启
+	- respawn_delay = "second"(可选)，如果respawn为true，延迟多少秒后启动
+	- required = "true | false"(可选)，该节点是否必须，如果为true，那么在该节点退出后，杀死整个roslaunch
+	- ns = "namespace"(可选)，在指定命名空间中启动节点
+	- clear_params = "true | false"(可选)，在启动前，删除节点的私有空间所有参数
+	- output = "log | screen"(可选)，日志发送，可以设置log文件，也可直接发送终端
+- 子级标签
+	- env 环境变量
+	- remap 重映射节点名称
+	- rosparam 参数设置
+	- param 参数设置
+
+> [!todo] respawn重启节点
+
+```launch
+<launch deprecated="This is dumped file">
+    <node pkg="turtlesim" type="turtlesim_node" name="my_turtle" output="screen" respawn="true" respawn_delay="1" />
+    <node pkg="turtlesim" type="turtle_teleop_key" name="my_key" output="screen" />
+</launch>
+```
+
+> [!todo] required必要节点
+
+```launch
+<launch deprecated="This is dumped file">
+    <node pkg="turtlesim" type="turtlesim_node" name="my_turtle" output="screen" required="true" />
+    <node pkg="turtlesim" type="turtle_teleop_key" name="my_key" output="screen" />
+</launch>
+```
+
+> [!fail] RLException: Invalid \<node> tag: respawn and required cannot both be set to true. 
+
+###### 文件标签 -> include标签
+
+> include标签用于将另一个XML格式的launch文件导入到当前文件夹
+
+- 属性：
+	- file = "$(find 包名)/xxx/xxx.launch"，要包含的文件路径
+	- ns = "namespace"，在指定命名空间导入文件
+- 子级标签
+	- env 环境变量设置
+	- arg 将参数传递给被包含的文件
+
+> [!todo] 常用于代码的复用
+
+```launch
+<launch>
+    <include file="$(find lauch_test)/launch/start.launch" />
+</launch>
+```
+
+###### 文件标签 -> remap标签
+
+> remap用于话题重命名
+
+- 属性：
+	- from = "src_topic"，原始话题名称
+	- to = "dest_topic"，目标名称
+- 子级标签
+
+> [!todo] 案例：使用ROS内置的控制器来移动乌龟，而非turtle_teleop_key
+
+```launch
+<launch>
+    <node pkg="turtlesim" type="turtlesim_node" name="my_turtle" output="screen" >
+        <remap from="/turtle1/cmd_vel" to="/cmd_vel" />
+    </node>
+    <node pkg="turtlesim" type="turtle_teleop_key" name="my_key" output="screen" />
+</launch>
+```
+
+###### 文件标签 -> param标签
+
+> \<param>标签主要用于参数服务器上设置参数，参数源可以在标签中指定，也可在外部加载
+>> 在\<node>中设置的，相当于私有命名空间
+>> **param使用内部指定标签居多**
+
+- 属性：
+	- name = "namespace/param_name"，参数名称，可以自带命名空间
+	- value = "var"(可选)，定义参数值，**如果此处忽略，必须指定外部文件作为参数源**
+	- type = "str | int | double | bool | yaml"(可选)，指定参数类型。如果未指明则：
+		- 如果包含‘.’的数字解析为浮点型，否则为整型
+		- “true | false”都是bool值(不区分大小写)
+		- 其他都被看做str
+- 子级标签：
+
+> [!todo] 对比两种param的区别
+
+```launch
+<launch>
+    <param name="param_a" type="int" value="100" />
+    <node pkg="turtlesim" type="turtlesim_node" name="my_turtle" output="screen" >
+        <remap from="/turtle1/cmd_vel" to="/cmd_vel" />
+        <param name="param_b" type="double" value="3.14" />
+    </node>
+    <node pkg="turtlesim" type="turtle_teleop_key" name="my_key" output="screen" />
+</launch>
+```
+
+```linux
+[bash1]$ roslaunch lauch_test param.launch 
+[bash2]$ rosparam list
+/my_turtle/param_b
+/param_a
+```
+
+- 可见，在\<node>标签内的param标签，是私有命名空间
+
+###### 文件标签 -> rosprama标签
+
+> \<rosparam>标签可以从YAML文件中导入参数，或者将参数导出到YAML文件。
+>> 在\<node>中设置的，相当于私有命名空间
+>> **rosparam使用外部YAML居多**
+
+- 属性：
+	- command = "load | dump | delete"(可选)，默认load，加载，导出或删除
+	- file = "$(find xxx)/xxx/xxx.yaml"，加载或导出的YAML文件
+	- param = "param_name"
+	- ns = "namespace"
+- 子级标签
+
+```launch
+<launch>
+    <rosparam command="load" file="$(find lauch_test)/launch/params.yaml" />
+    <node pkg="turtlesim" type="turtlesim_node" name="my_turtle" output="screen" >
+        <remap from="/turtle1/cmd_vel" to="/cmd_vel" />
+        <rosparam command="load" file="$(find lauch_test)/launch/params.yaml" />
+    </node>
+    <node pkg="turtlesim" type="turtle_teleop_key" name="my_key" output="screen" />
+</launch>
+```
+
+```linux
+[bash1]$ roslaunch lauch_test rosparam.launch 
+[bash2]$ rosparam list
+/bg_B
+/bg_G
+/bg_R
+/my_turtle/bg_B
+/my_turtle/bg_G
+/my_turtle/bg_R
+```
 
