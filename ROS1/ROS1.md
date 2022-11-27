@@ -3514,6 +3514,8 @@ $ roslaunch pkg xxx.launch
 </launch>
 ```
 
+> [!todo] 对比两种param的区别
+
 ```linux
 [bash1]$ roslaunch lauch_test rosparam.launch 
 [bash2]$ rosparam list
@@ -3525,3 +3527,93 @@ $ roslaunch pkg xxx.launch
 /my_turtle/bg_R
 ```
 
+> [!todo] 使用dump导出参数
+
+```launch
+<launch>
+    <rosparam command="load" file="$(find lauch_test)/launch/params.yaml" />
+    <rosparam command="dump" file="$(find lauch_test)/launch/params_out.yaml" />
+    <node pkg="turtlesim" type="turtlesim_node" name="my_turtle" output="screen" >
+        <remap from="/turtle1/cmd_vel" to="/cmd_vel" />
+        <rosparam command="load" file="$(find lauch_test)/launch/params.yaml" />
+    </node>
+    <node pkg="turtlesim" type="turtle_teleop_key" name="my_key" output="screen" />
+</launch>
+```
+
+```yaml
+rosdistro: 'noetic
+
+  '
+roslaunch:
+  uris:
+    host_ubuntu__37439: http://ubuntu:37439/
+    host_ubuntu__44123: http://ubuntu:44123/
+rosversion: '1.15.14
+
+  '
+run_id: 11d0d9cc-6e1a-11ed-bf36-e9c4a4918e32
+```
+
+> [!warning] dump属性会率先执行，也就是说，如果load和dump放在一起，那么load加入的参数是不会记入dump中的，相同的，其他标签也是一样
+
+###### 文件标签 -> group标签
+
+> \<group>标签可以对节点分组，具有ns属性，可以让节点归属某个命名空间
+
+- 属性：
+	- ns = "namespace"(可选)
+	- clear_params = "true | false"(可选)，启动前，是否删除组名称空间的所有参数(**慎用**)
+- 子级标签
+	- 除launch外所有标签
+
+> [!todo] 案例：启动两对turtlesim
+
+```launch
+<launch>
+    <group ns="first">
+        <node pkg="turtlesim" type="turtlesim_node" name="my_turtle" output="screen" />
+        <node pkg="turtlesim" type="turtle_teleop_key" name="my_key" output="screen" />
+    </group>
+
+    <group ns="second">
+        <node pkg="turtlesim" type="turtlesim_node" name="my_turtle" output="screen" />
+        <node pkg="turtlesim" type="turtle_teleop_key" name="my_key" output="screen" />
+    </group>
+</launch>
+```
+
+```linux
+$ rosnode list
+/first/my_key
+/first/my_turtle
+/rosout
+/second/my_key
+/second/my_turtle
+```
+
+###### 文件标签 -> arg标签
+
+> \<arg>标签适用于动态传参，类似于函数的参数，可以增强launch文件的灵活性
+
+- 属性：
+	- name = "param_name"
+	- default = "value"(可选)
+	- value = "var"（可选)，**不可和default共存**
+	- doc = "describe"，参数说明
+- 子级标签
+
+> [!todo] 案例：使用arg设置多个相同参数
+
+```launch
+<launch>
+    <arg name="car_length" default="0.55" />
+    <param name="A" value="$(arg car_length)" />
+    <param name="B" value="$(arg car_length)" />
+    <param name="C" value="$(arg car_length)" />
+</launch>
+```
+
+```linux
+$ roslaunch lauch_test arg.launch car_length:=0.77
+```
