@@ -15,6 +15,22 @@ ZF71R-DMX85-08DQY-8YMNC-PPHV8
 FA1M0-89YE3-081TQ-AFNX9-NKUC0 
 ```
 
+- VM17 产品密钥
+
+```txt
+VMware Workstation 17 Individual License  
+1. JA09H-4V15H-M80V8-8A8Z4-2U8N4  
+2. 5U692-4J102-488V1-120NP-C3KL0  
+3. 1C212-41352-081H8-693E2-AZ2J0  
+4. NA20H-0NK40-480Z8-C9C54-A6020  
+  
+VMware Workstation 17 Volume License  
+1. MG210-0EK8K-H89Y1-VLAN2-93K20  
+2. HF200-0W05K-089X8-4R1EK-032J0  
+3. 5A69H-4A08H-480K1-KU972-932L4  
+4. 5Y69H-0J250-H88C8-MJ8Q0-2C2P4
+```
+
 - 可被重复使用，若失效，请自行寻找
 
 ## Ubuntu ISO
@@ -31,7 +47,7 @@ FA1M0-89YE3-081TQ-AFNX9-NKUC0
 
 [rufus官网链接直达车](https://rufus.ie/zh/)
 
-- Vectory
+- Ventory
 
 > 如果不满足于双系统的人~
 
@@ -46,6 +62,14 @@ FA1M0-89YE3-081TQ-AFNX9-NKUC0
 ## Root和User
 
 - Linux中，Root和User是两个很鲜明的角色
+
+- 在Windows中，其实用户才是user，系统才是root，user也可以临时的使用root
+- 在Linux中，user是root也是user
+
+- $user  \#root
+- bash\ shell
+- linux里面，root的权利是至高无上的
+
 
 ## 换源
 
@@ -125,6 +149,8 @@ info：显示指定的rpm软件包的描述信息和概要信息；
 clean：清理yum过期的缓存；
 ```
 
+- archlinux -> pacman / yay
+
 ## Linux基本命令
 
 ### ls
@@ -140,8 +166,8 @@ clean：清理yum过期的缓存；
 
 ### cat
 
-- -b
-- -n
+- -b：不统计空白行，显示行号
+- -n：显示行号，包括空白行
 
 ### pwd
 
@@ -151,7 +177,7 @@ clean：清理yum过期的缓存；
 
 - -p
 
-### rmdir
+### rmdir -> 只能删除空文件夹
 
 ### rm
 
@@ -193,7 +219,7 @@ sudo find /usr -name "iostream" | xargs grep -i "cout"
 
 ### head
 
-- -n
+- -n：你想输出多少行 - 从头开始
 - -c
 
 ### tail
@@ -201,11 +227,15 @@ sudo find /usr -name "iostream" | xargs grep -i "cout"
 - -n
 - -c
 
+- less / more
+- 按q退出
+
 ### tar
 
 ```linux
 tar -cf archive.tar foo bar  # 从文件 foo 和 bar 创建归档文件 archive.tar。
 tar -tvf archive.tar         # 详细列举归档文件 archive.tar 中的所有文件。
+# c create file_name
 
 tar -rf all.tar *.gif
 # 这条命令是将所有.gif的文件增加到all.tar的包里面去。-r是表示增加文件的意思。
@@ -213,9 +243,9 @@ tar -rf all.tar *.gif
 tar -uf all.tar logo.gif
 # 这条命令是更新原来tar包all.tar中logo.gif文件，-u是表示更新文件的意思。
 
-tar -zcvf file.tar.gz xxx
+tar -zcvf file.tar.gz xxx # 最常用的归档压缩命令，后缀就是tar.gz
 
-tar -zxvf file.tar.gz
+tar -zxvf file.tar.gz # 最常用的解压命令
 ```
 
 - 注意：**-f参数是归档文件名称，必须处于归档文件名前，也就是最后一个参数位置**
