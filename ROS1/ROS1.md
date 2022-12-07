@@ -3617,3 +3617,7 @@ $ rosnode list
 ```linux
 $ roslaunch lauch_test arg.launch car_length:=0.77
 ```
+
+#### ROS工作空间覆盖
+
+> 工作空间覆盖实际上就是在不同工作空间中，存在
