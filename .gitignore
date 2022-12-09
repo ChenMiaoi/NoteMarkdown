@@ -1,15 +1,1 @@
-
-.obsidian/appearance.json
-.obsidian/graph.json
-.obsidian/workspace.json
-.obsidian/workspace.json
-.obsidian/backlink.json
-.obsidian/community-plugins.json
-.obsidian/core-plugins.json
-.obsidian/plugins/obsidian-style-settings/main.js
-.obsidian/plugins/obsidian-style-settings/manifest.json
-.obsidian/core-plugins.json
-.obsidian/plugins/obsidian-style-settings/styles.css
-.obsidian/workspace.json
-.obsidian/workspace.json
-.obsidian/core-plugins.json
+.obsidian/**
