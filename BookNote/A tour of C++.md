@@ -236,9 +236,145 @@ int i {7.54};  // in this statement, it was error, can't pass the compile
 	- 我们需要明确说明变量的范围或者精度的时候(例如，double 而非 float)
 
 > [!question] why when we need explicited variable to use auto rather that specific type?
+> <center> because compiler is well to use that </center>
 
 > We use **auto** where we don’t have a specific reason to mention the type explicitly. “Specific reasons” include:
 >> The definition is in a large scope where we want to make the type clearly visible to readers of our code.
 >> The type of the initializer isn’t obvious.
 >> We want to be explicit about a variable’s range or precision (e.g., **double** rather than **float**). ^quote25
 
+#Initialization/auto_use[[#^quote26]]
+
+- 这在范型编程中尤为重要，因为程序员很难知道一个对象的确切类型，而且这个对象的类型名可能很长
+
+> This is especially important in generic programming where the exact type of an object can be hard for the programmer to know and the type names can be quite long ^quote26
+
+## 1.5 Scope and Lifetime
+
+#Scope/local[[#^quote27]]
+
+- 函数形参也可以视作是局部变量
+	- 因此，就出现了一个问题 -> **函数中的局部变量作为返回值被返回**，因此C++中，局部变量的返回不允许被引用。**除非是右值引用**
+
+> Function argument names are considered local names. ^quote27
+
+#Scope/class[[#^quote28]]
+
+- 也就是说，只要在类中定义的成员变量(**且不是在类中的函数、lambda甚至enum中定义的**)，其作用范围就是在类中全局的
+
+>  if it is defined in a class, outside any function , lambda , or **enum class** . Its scope extends from the opening **{** of its enclosing declaration to the matching **}**. ^quote28
+
+#Scope/global[[#^quote29]]
+
+- 如果一个变量定义在任何函数、lambda甚至结构体之内，那么就称其为全局变量，其作用范围也是全局的 -> 全局的命名空间
+
+> A name not declared inside any other construct is called a _global name_ and is said to be in the _global namespace_. ^quote29
+
+## 1.6 Constants
+
+#Constants/const[[#^quote30]]
+
+- const: 其被主要用于指定接口，以便于可以使用指针或者引用来传值而不必担心数据会被修改 -> **尤其是引用**
+
+> **const**: This is used primarily to specify interfaces so that data can be passed to functions using pointers and references without fear of it being modified. ^quote30
+
+```c++
+void function(int* a, int& b) {  
+    // if we not use const to limit pointer and reference, the data may be modified  
+    *a = 5;  
+    b = 6;  
+}  
+  
+void function(const int* a, const int& b) {  
+    // if we use const, when we may modify it careless, const will talk to the compiler, we don't want it modified  
+    *a = 6; // wrong  
+    b = 7; // wrong  
+}  
+  
+void Contants() {  
+    // if we use const, we can do pass data without fear of it being modified  
+    int a = 2, b = 3;  
+    function(&a, b);  
+}
+```
+
+#Constants/constexpr[[#^quote31]]
+
+- constexpr：大致的意思就是“在编译期计算”。其主要用于指定常量，允许数据放置在只读内存中(不可能损坏) **-> 也就是说，允许其在内存中就进行计算**，为了更高效。
+
+> **constexpr**: meaning roughly “to be evaluated at compile time.” This is used primarily to specify constants, to allow placement of data in read-only memory (where it is unlikely to be corrupted), and for performance. The value of a **constexpr** must be calculated by the compiler. ^quote31
+
+```c++
+constexpr long fibonacii(long num) {  
+    return num <= 2 ? 1 : fibonacii(num - 1) + fibonacii(num - 2);  
+}  
+  
+long fibonacii(long num, int) {  
+    return num <= 2 ? 1 : fibonacii(num - 1) + fibonacii(num - 2);  
+}  
+  
+void Constants(int) {  
+    std::chrono::time_point start = std::chrono::system_clock::now();  
+    std::cout << fibonacii(45) << "\n";  
+    std::chrono::time_point end = std::chrono::system_clock::now();  
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds> (end - start).count() << " milliseconds -> constexpr\n";  
+  
+    start = std::chrono::system_clock::now();  
+    std::cout << fibonacii(45, 0) << "\n";  
+    end = std::chrono::system_clock::now();  
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds> (end - start).count() << " milliseconds -> none\n";  
+}
+```
+
+> [!question] why the constexpr not work?
+> <center> because the constexpr allow function to be called with non-constant </center>
+
+#Constants/constexpr_other[[#^quote32]]
+
+- 被constexpr修饰的函数能够被非常量参数调用，但是如果这样调用之后**运行的结果则是一个非常量表达式**。我们允许一个被contexpr修饰的函数在不需要常量表达式的上下文中使用非常量参数调用 -> **也就解释了，为什么上文中的contexpr失效的原因，因为其递归后的函数的结果就已经是non-constant了**
+
+> A **constexpr** function can be used for non-constant arguments, but when that is done the result is not a constant expression. We allow a **constexpr** function to be called with non-constant-expression arguments in contexts that do not require constant expressions. ^quote32
+
+#Constants/consteval[[#^quote33]]
+
+- 当我们只想使用编译期计算时，我们通常使用**consteval**而不是**constexpr**
+
+> When we want a function to be used only for evaluation at compile time, we declare it **consteval** rather than **constexpr**.  ^quote33
+
+```c++
+consteval long fibonacii(long num) {  
+    return num <= 2 ? 1 : fibonacii(num - 1) + fibonacii(num - 2);  
+}
+
+// when we declarated it by consteval, it'll be wrong. because the 'fibonacii' function is non-constant after iertation
+```
+
+#Constants/pure_function[[#^quote34]]
+
+- 声明**contexpr**或者**consteval**的函数是C++对纯函数概念的版本
+- **他们不会产生副作用，且只允许使用传过去的信息作为参数。特别是，他们不能修改非局部变量，但他们可以循环且使用自己的局部变量**
+
+> Functions declared **constexpr** or **consteval** are C++’s version of the notion of _pure functions_.
+> They cannot have side effects and can only use information passed to them as arguments. In particular, they cannot modify non-local variables, but they can have loops and use their own local variables. ^quote34
+
+```c++
+constexpr double nth(double x, int n) { // assume 0 <= n
+	double res = 1;
+	int i = 0;
+	while (i<n) { // while-loop: do while the condition is true 
+		res *= x;
+		++i;
+	}
+	return res;
+}
+```
+
+#Constants[[#^quote35]]
+
+- 在一些地方，语法规则需要常量表达式 -> (例如：数组边界、case标签、模板参数和使用**constexpr**声明的常量)
+- 在其他方面，**编译期计算对性能提升非常有用**
+- 同时，哪怕不考虑性能，不可变性(具有不可更改状态的对象)也是一个重要的设计理念
+
+> In a few places, constant expressions are required by language rules (e.g., array bounds, case labels, template value arguments, and constants declared using **constexpr**). 
+> In other cases, compile-time evaluation is important for performance. 
+> Independent of performance issues, the notion of immutability (an object with an unchangeable state) is an important design concern.

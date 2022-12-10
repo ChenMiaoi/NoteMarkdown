@@ -3620,4 +3620,268 @@ $ roslaunch lauch_test arg.launch car_length:=0.77
 
 #### ROS工作空间覆盖
 
-> 工作空间覆盖实际上就是在不同工作空间中，存在
+> 工作空间覆盖实际上就是在不同工作空间中，存在重名的功能包的情形。  
+>> ROS开发中，经常会自定义工作空间且工作空间可以同时存在多个，因此会出现重名的情况
+
+- 但是从实际情况中，该问题很好解决，便不再加以叙述
+
+#### ROS节点名称重名
+
+> 我们可以知道，ROS中创建的节点都是有名称的。**在ROS的网络拓扑中，是不允许出现同名节点的**
+
+> [!tip] ROS给出的方案是使用**命名空间或名称重映射**
+
+- 那么对于命名空间来说，就是添加前缀; 对于名称重映射来说，就是给名称起别名。
+	- 可以通过rosrun命令
+	- 可以通过launch文件
+	- 可以通过编码实现
+
+> [!todo] 案例：启动两个turtulesim_node节点，但是如果终端开启两个，那么第一次启动的会被关闭
+
+##### rosrun设置命名空间和重映射
+
+###### 设置命名空间
+
+> [!todo] 语法：rosrun pkg node \__ns:=new_space
+
+```linux
+$ rosrun turtlesim turtulesim_node __ns:=/xxx
+$ rosrun turtlesim turtulesim_node __ns:=/yyy
+
+$ rosnode list
+/xxx/turtlesim
+/yyy/turtlesim
+```
+
+###### 名称重映射
+
+> [!todo] 语法：rosrun pkg node \__name:=new_name
+
+```linux
+$ rosrun turtlesim turtlesim_node __name:=t1
+$ rosrun turtlesim turtlesim_node __name:=t2
+
+$ rosnode list
+/t1
+/t2
+```
+
+> [!warning] 注意：名称重映射可以使得运行节点名称改变，**或许这比添加命名空间更有效**，且两种方式可以叠加
+
+- 两种方式的叠加
+
+```linux
+$ rosrun turtlesim turtlesim_node __ns:=/xxx __name:=t1
+$ rosrun turtlesim turtlesim_node __ns:=/yyy __name:=t2
+
+$ rosnode list
+/xxx/t1
+/yyy/t2
+```
+
+##### launch文件设置命名空间和重映射
+
+> 我们在之前的学习中可以知道：在node标签中有两个属性 -> name和ns，**二者分别是用于实现名称重映射与命名空间设置的，且使用launch文件更为简单**
+
+###### 编写launch文件
+
+```launch
+<launch>
+	<node pkg="turtlesim" type="turtlesim_node" name="turtlesim" />
+	<!-- 采用名称重映射 -->
+	<node pkg="turtlesim" type="turtlesim_node" name="t1" />
+	<!-- 采用命名空间 -->
+	<node pkg="turtlesim" type="turtlesim_node" name="turtlesim" ns="/xxx" />
+	<!-- 采用命名空间叠加名称重映射 -->
+	<node pkg="turtlesim" type="turtlesim_node" name="t2" ns="/yyy" />
+</launch>
+```
+
+```linux
+$ rosnode list
+/t1
+/turtlesim
+/xxx/turtlesim
+/yyy/t2
+```
+
+##### 以编码的方式设置命名空间与重映射
+
+> 如果自定义节点实现，那么使用编码更为合适
+
+###### C++ -> 重映射
+
+```c++
+#include "ros/ros.h"
+
+int main(int argc, char* argv[]) {
+	// 名称别名设置
+	ros::init(argc, argv, "main", ros::init_options::AnonymousName);
+	return 0;
+}
+```
+
+###### C++ -> 命名空间
+
+```c++
+#include "ros/ros.h"
+#include <map>
+#include <string>
+
+int main(int argc, char* argv[]) {
+	// 命名空间的设置
+	std::map<std::string, std::string> _map;
+	_map["__ns"] = "xxxx";
+	ros::init(argc, argv, "main");
+}
+```
+
+#### ROS话题重名
+
+> 在ROS中，话题重名也是经常的，**不同的节点之间通信都依赖于话题，如果话题重名，可能导致订阅的消息是非预期的**
+
+> [!tip] 在实际中，ROS给出的解决方案与节点类似，也是使用名称重映射或者命名空间，**根据命名空间不同，有全局、相对和私有三种之分**
+
+- 全局 -> 参数名称直接参考ROS系统，与节点命名空间平级
+- 相对 -> 参数名称参考的是节点的命名空间，与节点名称平级
+- 私有 -> 参数名称参考的是节点名称，是节点名称的子级
+
+##### rosrun设置话题重映射
+
+> [!todo] 语法：rosrun pkg node topic_name:=new_topic_name
+
+```linux
+$ rosrun teleop_twist_keyboard teleop_twist_keyborad.py /cmd_vel:=/turtle1/cmd_vel
+```
+
+- 实际上，也可以设置乌龟的话题名称，但在此处就不累赘的讲述了
+
+##### launch文件设置话题重映射
+
+> 使用launch文件设置是依托于launch中的**remap**标签
+
+```launch
+<launch>
+	<!-- 实现键盘控制乌龟运动 -->
+	<!-- 将乌龟的话题重映射 -->
+	<node pkg="turtlesim" type="turtlesim_node" name="t1">
+		<remap from="/turtle1/cmd_vel" to="/cmd_vel" />
+	</node>
+	<node pkg="teleop_twist_keyboard" type="teleop_twist_keyboard.py" name="key1" />
+	
+	<!-- 将键盘的话题重映射 -->
+	<node pkg="teleop_twist_keyboard" type="teleop_twist_keyboard.py" name="key2">
+		<remap from="/cmd_vel" to="/turtle1/cmd_vel" />
+	</node>
+	<node pkg="turtlesim" type="turtlesim_node" name="t2">
+</launch>
+```
+
+##### 以编码的方式设置
+
+###### 话题权限
+
+| 权限符号 | 含义 | 案例 |
+| :---: | :---: | :---: |
+| 以/开头 | 全局话题 | /chatter |
+| 非/开头 | 相对话题 | chartter |
+| 以～开头 | 私有话题 | ~chartter |
+
+###### 全局话题
+
+```c++
+#include <ros/ros.h>
+#include <std_msgs/String.h>
+
+int main(int argc, char* argv[]) {
+	ros::init(argc, argv, "main");
+	ros::NodeHandle nh;
+	ros::Publisher pub = nh.advertise<std_msgs::String> (
+		"/chatter", 10
+	);
+	  
+	while (ros::ok()) {
+	
+	}
+	
+	return 0;
+}
+```
+
+> [!todo] 可以看见，全局话题依托了topic模型，且节点名称和话题名称互不干扰
+
+```linux
+$ rosnode list 
+/main
+$ rostopic list 
+/chatter
+```
+
+###### 相对话题
+
+```c++
+#include <ros/ros.h>
+#include <std_msgs/String.h>
+
+int main(int argc, char* argv[]) {
+	ros::init(argc, argv, "main");
+	ros::NodeHandle nh;
+	
+	ros::Publisher pub = nh.advertise<std_msgs::String> (
+		"chatter", 10
+	);
+	
+	while (ros::ok()) {
+	
+	}
+	
+	return 0;
+}
+```
+
+> [!todo] 可以看见，相对话题都依托于命名空间开始，但是互相之间也不会干扰
+
+```linux
+$ rosrun code_retopic topic_main __ns:=xxx
+
+$ rosnode list 
+/xxx/main
+zack@dezi:~$ rostopic list 
+/xxx/chatter
+```
+
+###### 私有话题
+
+> [!warning] 私有话题就需要结合NodeHandle来设置了
+
+```c++
+#include <ros/ros.h>
+#include <std_msgs/String.h>
+
+int main(int argc, char* argv[]) {
+	ros::init(argc, argv, "main");
+	
+	ros::NodeHandle nh("~");
+	ros::Publisher pub = nh.advertise<std_msgs::String> (
+		"chatter", 10
+	);
+	
+	while (ros::ok()) {
+	
+	}
+
+return 0;
+}
+```
+
+> [!todo] 可以看见，私有话题就在特定的话题名下了
+
+```linux
+$ rosnode list 
+/xxx/main
+$ rostopic list 
+/xxx/main/chatter
+```
+
+> [!bug] 特别的，如果在私有话题**～**下，NodeHandle以全局话题的形式创建，那么最终的表现为全局话题
+
