@@ -3885,3 +3885,150 @@ $ rostopic list
 
 > [!bug] 特别的，如果在私有话题**～**下，NodeHandle以全局话题的形式创建，那么最终的表现为全局话题
 
+#### ROS参数名称设置
+
+> 在ROS中，节点话题名称都可能出现重名的情况，同理，参数名称也可能重名
+
+> [!todo] 同样的，参数名称的设置也有三种权限之分
+
+##### rosrun参数设置
+
+> rosrun在启动节点的时候可以设置参数
+
+> [!todo] 语法：rosrun pkg node \_param_name:=value
+
+```linux
+$ rosrun turtlesim turtlesim_node _A:=100
+
+$ rosparam list
+/turtlesim/A
+```
+
+##### launch文件设置参数
+
+> [!warning] 值得注意的是：在node外设置的参数是全局的，在内部设置的是私有的
+
+```launch
+<launch>
+    <param name="p1" value="100" />
+    <node pkg="turtlesim" type="turtlesim_node" name="t1">
+        <param name="p2" value="100" />
+    </node>
+</launch>
+```
+
+```linux
+$ rosparam list
+/p1
+/t1/p2
+```
+
+##### 编码设置参数
+
+###### ros::param
+
+```c++
+#include <ros/ros.h>
+
+int main(int argc, char* argv[]) {
+	ros::init(argc, argv, "main");
+	ros::param::set("/chatter", 100);
+	ros::param::set("chatter", 100);
+	ros::param::set("~chatter", 100);
+	return 0;
+}
+```
+
+```linux
+$ rosrun code_reparam code_reparam __ns:=xxx
+$ rosparam list
+/chatter
+/xxx/chatter
+/xxx/main/chatter
+```
+
+###### ros::NodeHandle
+
+```c++
+#include <ros/ros.h>
+
+int main(int argc, char* argv[]) {
+	ros::init(argc, argv, "main");
+	ros::NodeHandle nh;
+	nh.setParam("chatter", 100);
+	nh.setParam("chatter", 100);
+	
+	ros::NodeHandle nh1("~");
+	nh1.setParam("chatter", 100);
+	return 0;
+}
+```
+
+```linux
+$ rosrun code_reparam code_reparam __ns:=xxx
+$ rosparam list
+/chatter
+/xxx/chatter
+/xxx/main/chatter
+```
+
+#### ROS分布式通信
+
+> ROS是一个分布式计算环境。一个运行中的ROS系统可以包含分布在多台计算机上的多个节点。**任何节点可能随时需要与任何其他节点进行通信**
+
+> [!warning] 因此，ROS对网络配置有某些要求：
+> 1. **所有端口上的所有机器之间必须有完整的双向链接**
+> 2. **每台计算机必须通过所有其他计算机都可以解析的名称来公告自己**
+
+##### 环境配置
+
+- 先要保证不同计算机处于同一网络中，最好设置固定IP。*如果为虚拟机，需要将网络适配器改为桥接模式*
+
+> [!todo] 查看机器的IP
+
+```linux
+$ ifconfig
+
+$ ip link
+```
+
+![[设置固定IP.png]]
+
+- 如上图所示，根据ifconfig的命令查询到的IP，掩码和网关进行填写
+
+##### 修改配置文件
+
+> 分别修改不同计算机的/etc/hosts文件，在该文件中追加上对方的IP地址和计算机名
+
+- 主机端：
+	- 从机的IP    从机的计算机名
+- 从机端
+	- 主机的IP    主机的计算机名
+
+![[Hosts文件.png]]
+
+> [!success] 设置完毕后，先注销当前用户，登录后通过ping命令查看是否能够互通
+
+##### 配置主机IP
+
+> 配置主机的IP地址，只需要在.bashrc中追加
+
+```linux
+export ROS_MASTER_URI=http://master_ip:port
+export ROS_HOSTNAME=master_ip
+```
+
+##### 配置从机IP
+
+> 配置从机的IP地址，**从机可以有多台，每台都要做如下设置**：
+
+```linux
+export ROS_MASTER_URI=http://master_ip:port
+export ROS_HOSTNAME=peer_ip
+```
+
+##### 测试
+
+- 主机必须启动roscore
+- 主机启动订阅节点，从机启动发布节点，测试通信是否正常
+- 反向测试，主机启动发布节点，从机启动订阅节点，测试通信是否正常
