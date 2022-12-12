@@ -377,4 +377,298 @@ constexpr double nth(double x, int n) { // assume 0 <= n
 
 > In a few places, constant expressions are required by language rules (e.g., array bounds, case labels, template value arguments, and constants declared using **constexpr**). 
 > In other cases, compile-time evaluation is important for performance. 
-> Independent of performance issues, the notion of immutability (an object with an unchangeable state) is an important design concern.
+> Independent of performance issues, the notion of immutability (an object with an unchangeable state) is an important design concern. ^quote35
+
+## 1.7 Pointers, Arrays and References
+
+#Arrays[[#^quote36]]
+
+- **最基本的数据集合就是连续分配的相同类型的数据序列**，被成为数组。其基本上是被硬件所提供的
+	- 实际上就是内存，数组是在内存中连续开辟的一段有序空间
+
+> The most fundamental collection of data is a contiguously allocated sequence of elements of the same type, called an _array_. This is basically what the hardware offers. ^quote36
+
+#Arrays/size[[#^quote37]]
+
+```c++
+char v[6];
+```
+
+- 所有的数组的下限都是0,所以v中有六个元素，v\[0]到v\[5]。**数组的大小必须是常量表达式**
+	- 实际上，目前数组也有很多特殊的形式，比如变长数组、柔性数组甚至更多的
+
+> All arrays have **0** as their lower bound, so **v** has six elements, **v[0]** to **v[5]**. The size of an array must be a constant expression. ^quote37
+
+#Pointer[[#^quote38]]
+
+- 在表达式中
+	- 前缀"\*"表示"什么什么的内容" -> 或者说包含
+	- 前缀"&"表示"什么什么的地址"
+
+> In an expression, prefix unary * means “contents of” and prefix unary **&** means “address of.” ^quote38
+
+```c++
+char v[6];
+char* p = &v[3];
+char x = *p; // *p is the object that p points to
+```
+
+![[A tour of C++ Point Graph.png]]
+
+#Arrays/range-for[[#^quote39]]
+
+- 注意：当我们使用初始化列表匿名数组的时候，**不必指定数组绑定** 
+	- -> 也就是说，不需要将其给定到一个确切的变量中
+
+> Note that we don’t have to specify an array bound when we initialize it with a list. ^quote39
+
+```c++
+for (auto x : {1, 2, 3, 4, 5})
+	std::cout << x << " ";
+```
+
+#Reference[[#^quote40]]
+
+```c++
+void increment() {
+	int v[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+	for (auto& x : v) // add 1 to each x in v
+		++x;
+}
+```
+
+- 如果你不想**将v中的值复制到变量x中，而只是让x引用一个元素** -> auto& x
+- 在上述声明中，这个一元后缀"&"的意思是引用。引用类似于指针，不同之处在于引用不需要使用"\*"来进行解引用去访问指向的值
+
+> If we didn’t want to copy the values from **v** into the variable **x**, but rather just have **x** refer to an element
+> In a declaration, the unary suffix **&** means “reference to.” A reference is similar to a pointer, except that you don’t need to use a prefix * to access the value referred to by the reference. ^quote40
+
+#Reference/function[[#^quote41]]
+
+- 引用在指定函数参数上特别有用
+	- 引用可以简单的就将指针复杂的功能简化，而达到类似与指针一样的效果 -> 简化内存，修改值...
+
+> References are particularly useful for specifying function arguments. ^quote41
+
+#Reference/const[[#^quote42]]
+
+- 当我们不想修改一个参数的值但是又不想其在传参的过程中产生太大的代价，我们可以使用一个 const reference，也就是说，对常量的引用
+	- 事实上，const reference是极为有用的，并且在代码中很常见
+
+> When we don’t want to modify an argument but still don’t want the cost of copying, we use a **const** reference; that is, a reference to a **const**. ^quote42
+
+```c++
+double sum(const std::vector<double>&);
+```
+
+### 1.7.1 The Null Pointer
+
+#nullptr[[#^quote43]]
+
+- 习惯性的检查一个指针是否指向实际的值是很明智的
+	- 由于C/C++的指针可以指向空的原因，做这种检查是很有必要的
+
+> It is often wise to check that a pointer argument actually points to something ^quote43
+
+```c++
+int count_x(const char* p, char x) {
+	// count the number of occurrences of x in p[]
+	// p is assumed to point to a zero-terminated array of char (or to nothing)
+	if (p == nullptr)
+		return 0;
+	int count = 0;
+	for (; *p != 0; ++p)
+		if (*p == x)
+			++count;
+	return count;
+}
+```
+
+#nullptr/Null[[#^quote44]]
+
+- 在老标准的代码中，通常使用0或者NULL而不是nullptr。**但是，nullptr的善用可以消除整形(如0和NULL)和指针(nullptr)之间的潜在混淆**
+	- 因为在老标准中，NULL的定义为：
+
+```c++
+#define NULL (void*)0 // -> 其极有可能出现二义性，但是又可以有妙用
+
+if (pointer != NULL) // -> 这里可以是判断，但是其实可以通过直接pointer来判断
+if (pointer) // -> 如果pointer == NULL时，那么实际上这里就是 if (0)
+```
+
+> In older code, **0** or **NULL** is typically used instead of **nullptr**. However, using **nullptr** eliminates potential confusion between integers (such as **0** or **NULL**) and pointers (such as **nullptr**). ^quote44
+
+#nullptr/null-reference[[#^quote45]]
+
+- 这里没有空引用 -> 也就是说**不允许没有初始化引用的存在**
+- 引用必须引用有效对象(假定它引用有效对象) -> 但是一些晦涩而又smart的操作可以绕过这一约定 -> 蠢吧
+
+> There is no “null reference.” A reference must refer to a valid object (and implementations assume that it does). There are obscure and clever ways to violate that rule; don’t do that. ^quote45
+
+## 1.8 Tests
+
+## 1.9 Mapping to Hardware
+
+#Map-Hardware[[#^quote46]]
+
+- C++提供了到硬件的直接映射。当你使用一种基本操作时，**其实现是由硬件提供的**，且通常是单独的机器指令。例如，两个整数相加，$x + y$执行一个整数相加的机器指令
+- C++实现将计算机的内存视为一系列内存位置，它可以在其中放置(类型化)对象并使用指针寻址
+
+> C++ offers a direct mapping to hardware. When you use one of the fundamental operations, the implementation is what the hardware offers, typically a single machine operation. For example, adding two **int**s, **x+y** executes an integer add machine instruction.
+> A C++ implementation sees a machine’s memory as a sequence of memory locations into which it can place (typed) objects and address them using pointers ^quote46
+
+![[Mapping to Hardware.png]]
+
+#Map-Hardware/pointer[[#^quote47]]
+
+- **指针在内存中表示为计算机地址**，因此上图中p的数值为103.
+	- 实际上这样看上去很想数组，**因为数组在C++是对"内存中连续的对象序列"的基本抽象**
+
+> A pointer is represented in memory as a machine address, so the numeric value of **p**in this figure would be **103**. ^quote47
+
+#Map-Hardware/construct[[#^quote48]]
+
+- **基本语言结构到硬件的简单映射对于基本的底层性能至关重要**，而C/C++几十年来一直以这种性能而闻名。C/C++的基本机器模型基于计算机硬件而不是某种形式上的数学
+	- 也就是说，C/C++能够沟通底层，这也就是为什么C/C++经久不衰的一个原因
+
+> The simple mapping of fundamental language constructs to hardware is crucial for the raw low-level performance for which C and C++ have been famous for decades. The basic machine model of C and C++ is based on computer hardware, rather than some form of mathematics. ^quote48
+
+### 1.9.1 Assignment
+
+#Assignment[[#^quote49]]
+
+- 内置类型的分配是简单的计算机拷贝操作
+
+> An assignment of a built-in type is a simple machine copy operation. ^quote49
+
+```c++
+int x = 2;
+int y = 3;
+x = y;
+```
+
+![[Assignment.png]]
+
+> [!tip] The two objects are independent. We can change the value of one without affecting another.**Unlike Java, C# and others, but like C, that is true for all types**
+
+- If we want different objects to refer to the same value, we can do:
+
+```c++
+int x = 2;
+int y = 3;
+int *p = &x;
+int *q = &y;
+p = q;
+```
+
+![[AssignmentPointer.png]]
+
+#Assignment/reference[[#^quote50]]
+
+- 指针和引用都可以指向/引用对象，并且都可以在内存中表示为计算机地址。但是他们相互之间所使用的语言规则不同。**对引用的赋值不会更改引用所引用的内容**
+
+> A reference and a pointer both refer/point to an object and both are represented in memory as a machine address. However, the language rules for using them differ. Assignment to a reference does not change what the reference refers to but assigns to the referenced object ^quote50
+
+```c++
+int x = 2;
+int y = 3;
+int& r = x;
+int& r2 = y;
+r = r2;  // -> if we do that, just let x become the value of y
+```
+
+![[AssignmentReference.png]]
+
+### 1.9.2 Initialization
+
+#Map-Hardware/Initialization[[#^quote51]]
+
+- **初始化不同于赋值**，一般来说，为了使赋值正常工作，分配的对象必须有一个值。
+- 另一方面，**初始化的作用在于将未初始化的内存片段变为有效对象**
+- 在C/C++中，对于所有类型，读取或者写入未初始化变量的结果都是未定义的
+
+> Initialization differs from assignment. In general, for an assignment to work correctly, the assigned-to object must have a value. On the other hand, the task of initialization is to make an uninitialized piece of memory into a valid object. For almost all types, the effect of reading from or writing to an uninitialized variable is undefined. ^quote51
+
+# 2. User-Defined Types
+
+## 2.1 Introduction
+
+#User-Defined/Introduction[[#^quote52]]
+
+- 然而，C++没有提供一套高级的接口设施去给程序员方便地编写高级应用。相反，C++用了一系列复杂的抽象机制来增强内置类型和操作符，程序员可以从中构建此类高级设施
+
+> However, they don’t provide the programmer with high-level facilities to conveniently write advanced applications. Instead, C++ augments the built-in types and operations with a sophisticated set of _abstraction mechanisms_ out of which programmers can build such high-level facilities. ^quote52
+
+#User-Defined/type[[#^quote53]]
+
+- 使用C++抽象机制从其他类构建的类型称为用户自定义类型
+	- 自定义类型通常优于内置类型，因为它们**更易于使用、不易出错，并且通常与直接使用内置类型一样高效，甚至更为高效**
+
+> Types built out of other types using C++’s abstraction mechanisms are called _user-defined types_. ^quote53
+
+## 2.2 Structures
+
+#User-Defined/Structure[[#^quote54]]
+
+- 构建一个新类型的第一步通常是将其所需的元素组织到数据结构中
+	- 组织 -> 描述
+
+> The first step in building a new type is often to organize the elements it needs into a data structure ^quote54
+
+```c++
+struct Vector {
+	double* elem;
+	int sz;
+};
+
+void vector_list(Vector& v, int s) { // initialize a Vector
+	v.elem = new double[s];
+	v.sz = s;
+}
+```
+
+#User-Defined/Structure/new[[#^quote55]]
+
+- new运算符从被成为空闲存储(也被叫做动态内存区和堆)的区域分配内存。**在空闲存储区上被分配的对象与其创建的范围无关，一直"存活"到使用delete操作符将其摧毁**
+
+> The **new** operator allocates memory from an area called the _free store_ (also known as _dynamic memory_ and _heap_). Objects allocated on the free store are independent of the scope from which they are created and “live” until they are destroyed using the **delete** operator ^quote55
+
+```c++
+// a simple use Vector
+double read_and_sum(int s) {
+	Vector v;
+	vector_init(v, s);
+
+	for (int i = 0; i !=s; ++i)
+		std::cin >> v.elem[i];
+
+	double sum = 0;
+	for (int i = 0; i != s; ++i)
+		sum += v.elem[i];
+	return sum;
+}
+```
+
+#User-Defined/Structure/to[[#^quote56]]
+
+- 我们使用"."(点)来获取变量(或者甚至引用)结构体成员
+- 使用"->"来获取指针结构体成员
+
+> We use **.** (dot) to access **struct** members through a name (and through a reference) and **->** to access **struct** members through a pointer. ^quote56
+
+```c++
+void f(Vector& v, Vector& rv, Vector* pv) {  
+    int i1 = v.sz;  
+    int i2 = rv.sz;  
+    int i3 = pv->sz;  
+}
+```
+
+## 2.3 Classes
+
+#User-Defined/Classes[[#^quote57]]
+
+- 将数据与数据上的操作分开指定具有很多优势，例如能够任意方式使用数据。但是，**用户定义类型需要在表示和操作之间建立更紧密的连接，以具有“真实类型”所期望的所有属性**
+
+> Having data specified separately from the operations on it has advantages, such as the ability to use the data in arbitrary ways. 
+> However, a tighter connection between the representation and the operations is needed for a user-defined type to have all the properties expected of a “real type.” ^quote57
