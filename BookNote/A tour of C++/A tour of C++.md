@@ -672,3 +672,164 @@ void f(Vector& v, Vector& rv, Vector* pv) {
 
 > Having data specified separately from the operations on it has advantages, such as the ability to use the data in arbitrary ways. 
 > However, a tighter connection between the representation and the operations is needed for a user-defined type to have all the properties expected of a “real type.” ^quote57
+
+#User-Defined/Classes/want[[#^quote58]]
+
+- 特别是，我们经常想要保证用户无法访问表示(**自定义类型中的成员**)，以简化使用且保证数据的一致性(**防止用户对内部数据直接进行更改**)，并允许用户之后通过接口改进表示(**允许用户在定义之后，通过我们设计的接口去规范化的修改内部结构**)。
+- 要做到这一点，我们必须区分一个类型的接口(供所有人使用)和它的实现(可以访问其他情况下无法访问的数据)
+	- 事实上，这就是OOP中的封装性，**而这种语言机制，就被称为类**
+
+> In particular, we often want to keep the representation inaccessible to users so as to simplify use, guarantee consistent use of the data, and allow us to later improve the representation. To do that, we have to distinguish between the interface to a type (to be used by all) and its implementation (which has access to the otherwise inaccessible data). ^quote58
+
+-   The interface of a class is defined by its **public** members, and its **private**members are accessible only through that interface. The **public** and **private** parts of a class declaration can appear in any order
+
+```c++
+class Vector {  
+public:  
+    Vector(int s): elem{new double[s]}, sz{s} {}  
+    double& operator[] (int i) { return elem[i]; }  
+    int size() { return sz; }  
+private:  
+    double* elem;  
+    int sz;  
+};
+```
+
+#User-Defined/Classes/size[[#^quote59]]
+
+> The number of elements (6 in the example) can vary from **Vector** object to **Vector** object, and a **Vector** object can have a different number of elements at different times. **However, the Vector object itself is always the same size.**
+
+```c++
+Vector v1(6);
+Vector v2(12);
+
+// we can see the sz in v1 is 6 but v2 is 12
+sizeof(v1)
+sizeof(v2)
+
+// -> the the size of two are both the same value 16
+```
+
+- 这是C++中处理不同数量信息的基本技术：一个固定大小的“句柄”，指的是“其他地方”(例如，在new分配的空闲存储区上)
+	- **至于为什么sizeof(v1)的值为16,涉及到内存对齐的概念**
+
+![[User-Class-size.png]]
+
+> This is the basic technique for handling varying amounts of information in C++: a fixed-size handle referring to a variable amount of data “elsewhere” (e.g., on the free store allocated by **new**; ^quote59
+
+#User-Defined/Classes/initialize[[#^quote60]]
+
+- 与普通函数不同，构造函数保证了类的对象的初始化。因此，定义构造函数消除了类未初始化变量的问题。
+
+> Unlike an ordinary function, a constructor is guaranteed to be used to initialize objects of its class. Thus, defining a constructor eliminates the problem of uninitialized variables for a class. ^quote60
+
+#User-Defined/Classes/struct[[#^quote61]]
+
+- struct和class之间没有本质上的区别。**默认情况下，struct只是一个成员公开的类**
+	- 相对的，class就是成员私有的
+
+> There is no fundamental difference between a **struct** and a **class**; a **struct** is simply a **class** with members **public** by default. ^quote61
+
+## 2.4 Enumerations
+
+#User-Defined/Enumerations/enum_class[[#^quote62]]
+
+- 除了类，C++还支持一种用户自定义类型的可以列出每一项值的简单形式，这就是枚举
+- 注意枚举变量在其枚举器的范围内，因为他们可以在不同的枚举中重复使用而不会混淆
+
+> In addition to classes, C++ supports a simple form of user-defined type for which we can enumerate the values
+> Note that enumerators are in the scope of their **enum class**, so that they can be used repeatedly in different **enum class**es without confusion. ^quote62
+
+```c++
+enum class Color {
+	red,
+	blue,
+	green
+};
+
+enum Color {}; // -> the not same as enum class Color
+```
+
+> [!fail] In fact, the **class** after the **enum** just to specifie that an enumeration is strongly typed and that ist enumerations are scoped. **You can't ignore the class just use the enum to declaration**
+
+- **Similarly, we cannot implicitly mix Color and integer values**
+
+```c++
+int i = Color::red; // -> error: Color::red is not an int
+Color c = 2; // -> error: 2 is not a Color
+```
+
+#User-Defined/Enumerations/initialize[[#^quote63]]
+
+- 捕获尝试的转换为枚举(**通过隐式转换为枚举**)是防止错误的良好措施。但我们通常希望使用内置类型的值(默认情况是int)初始化枚举 -> 因此显示的转换是允许的 -> **通过列表初始化**
+
+> Catching attempted conversions to an **enum** is a good defense against errors, but often we want to initialize an **enum** with a value from its underlying type (by default, that’s **int**), so that’s allowed, as is explicit conversion from the underlying type ^quote63
+
+```c++
+Color x = Color {5};
+color y {6};
+```
+
+- **Similarly, we can explicitly convert an enum value to its underlying type**
+
+```c++
+int x = int(Color::red);
+```
+
+#User-Defined/Enumerations/operation[[#^quote64]]
+
+- 默认情况下，枚举只定义了赋值、初始化和比较(例如，\=\= 和 <;)。但是，枚举也是一个用户自定义类型，因此我们可以为其重载运算符
+
+> By default, an **enum class** has assignment, initialization, and comparisons (e.g., \=\=and <; ) defined, annd only those. However, an enumeration is a user-defined type, so we can define operators for it ^quote64
+
+```c++
+Traffic_light& operator++ (Traffic_light& t) { // prefix increment: ++Color  
+    switch (t) {  
+        case Traffic_light::green: return t = Traffic_light::yellow;  
+        case Traffic_light::yellow: return t = Traffic_light::red;  
+        case Traffic_light::red: return t = Traffic_light::green;  
+    }  
+}
+
+auto signal = Traffic_light::red;  
+Traffic_light next = ++signal;
+```
+
+- 这里，有一个值得注意的操作，就是在内部通过switch选择之后，然后再通过赋值到下一个枚举值
+	- 因为我们知道，**枚举是按顺序的，且枚举值是一个常量**，这种操作极大的简化了代码，超级优雅
+
+- **If the repetition of the enumeration name, Traffic_light, becomes too tedious, we can abbreviate it in a scope**
+	- 我们可以使用using来简化枚举类型的长度
+
+```c++
+Traffic_light& operator++ (Traffic_light& t) { // prefix increment: ++Color  
+    using enum Traffic_light;  
+    switch (t) {        
+	    case green: return t = yellow;        
+	    case yellow: return t = red;        
+	    case red: return t = green;    
+    }
+}
+```
+
+#User-Defined/Enumerations/enum[[#^quote65]]
+
+- **如果你不想显示限定枚举，并且希望枚举值可以为整数(无需显示转换)**，则可以从**enum class**中删除**class**以获取"普通"枚举。而“普通”枚举与enum class无异，但是**可以被隐式转换**
+
+> If you don’t ever want to explicitly qualify enumerator names and want enumerator values to be **int**s (without the need for an explicit conversion), you can remove the **class** from **enum class** to get a “plain” **enum**. The enumerators from a “plain” **enum**are entered into the same scope as the name of their **enum** and implicitly convert to their integer values. ^quote65
+
+```c++
+enum Color {
+	red,
+	green,
+	blue
+};
+
+int col = Color::green; // -> OK
+Color c = 1;
+```
+
+- The value of col is 1. **By default, the integer values of enumerators start with 0 and increase by one for each additional enumerator.**
+
+## 2.5 Unions
+
