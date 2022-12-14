@@ -833,3 +833,64 @@ Color c = 1;
 
 ## 2.5 Unions
 
+#User-Defined/Unions[[#^quote66]]
+
+- union是一种结构体，**其中所有成员都分配在同一地址，以至于union占据的空间与其最大的成员一样多**。因此，**union只能为一个成员在同一时间保存一个值**
+
+> A **union** is a **struct** in which all members are allocated at the same address so that the **union** occupies only as much space as its largest member. Naturally, a **union** can hold a value for only one member at a time. ^quote66
+
+```c++
+enum class Type { // a Type can hold values ptr and num  
+    ptr,  
+    num  
+};  
+  
+struct Entry {  
+    std::string name;  
+    Type t;  
+    Node* p; // use p if t == Type::ptr  
+    int i;  // use i if t == Type::num  
+};  
+  
+void f(Entry* pe) {  
+    if (pe->t == Type::num)  
+        std::cout << pe->i;  
+    else if (pe->t == Type::ptr)  
+        std::cout << pe->p;  
+}
+```
+
+- The members p and i are never used at the same time, so soace is wasted. Use union can easily recovere.
+
+```c++
+union Value {
+	Node* p;
+	int num;
+}
+```
+
+- 这种空间优化对于占据大量内存的应用程序或许很重要，因此这样紧凑的内存表示是至关重要的
+
+```c++
+struct Entry {  
+    std::string name;  
+    Type t;  
+    Value v;  
+};  
+  
+void f(Entry* pe) {  
+    if (pe->t == Type::ptr)  
+        std::cout << pe->v.p;  
+    else  
+        std::cout << pe->v.i;  
+}
+```
+
+> [!todo] Here is a question: The **"variant"** in $15.4.1
+
+# 3. Modularity
+
+> 模块性
+
+## 3.1 Introduction
+
