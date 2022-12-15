@@ -894,3 +894,185 @@ void f(Entry* pe) {
 
 ## 3.1 Introduction
 
+#Modularity/Introduction[[#^quote67]]
+
+- C++程序由许多独立开发的部分组成，例如函数、用户自定义类型、类层级结构和模板。**管理如此众多部件的关键是在于明确定义这些部件之间的交互**
+
+> A C++ program consists of many separately developed parts, such as functions , user-defined types, class hierarchies, and templates. The key to managing such a multitude of parts is to clearly define the interactions among those parts. ^quote67
+
+- 第一步，也是最重要的一部是区分部件的接口和实现。**在语言层面，C++通过声明表示接口。声明指明使用函数或类型所需的所有内容**
+
+```c++
+double sqrt(double); // the square root function takes a double and returns a double  
+  
+class Vector { // what is needed to use a Vector  
+public:  
+    Vector(int s);  
+    double& operator[] (int i);  
+    int size();  
+private:  
+    double* elem;  
+    int sz;  
+};
+```
+
+- **The key point here is that the function bodies, the function definitions, can be "elsewhere"**
+
+```c++
+double sqrt(double d) { // definition of sqrt()  
+    // ...    return 0;  
+}  
+  
+Vector::Vector(int s): elem {new double[s]}, sz {s} { // definition of the constructor  
+    // initialize members}  
+  
+double& Vector::operator[](int i) { // definition of subscription  
+    return elem[i];  
+}  
+  
+int Vector::size() { // definition of size()  
+    return sz;  
+}
+```
+
+## 3.2 Separate Compilation
+
+#Modularity/SeparateCompilation[[#^quote68]]
+
+- C++支持分离编译的概念，**用户代码只能看见所使用的类型和函数的声明**
+
+> C++ supports a notion of separate compilation where user code sees only declarations of the types and functions used. ^quote68
+
+- 我们可以通过两种方式实现分离编译：
+	- Header files：将声明放置在一个单独的文件，这被称为头文件，然后并以文本的方式\#include需要其声明的头文件
+	- Modules：定义模块文件，单独的编译该文件，然后在需要时导入。**导入模块的代码只能看到显式导出的声明**
+
+#Modularity/SeparateCompilation/work[[#^quote69]]
+
+- 上述两者都可用于将程序组织成一组半独立的代码片段。**这种分离可用于最小化编译时间，并强制将程序逻辑上不同的部分分离(从而最大限度地减少错误的可能)**。库通常是独立编译的代码片段(例如，函数)的集合。
+
+> Either can be used to organize a program into a set of semi-independent code fragments. Such separation can be used to minimize compilation times and to enforce separation of logically distinct parts of a program (thus minimizing the chance of errors). A library is often a collection of separately compiled code fragments (e.g., functions). ^quote69
+
+> [!tip] 用于组织代码的头文件技术可以追溯到C语言的早期，**到目前位置仍然是最常见的**。模块的使用在C++20中新增的，其在代码整洁和编译时间方面提供了巨大的优势
+
+### 3.2.1 Header Files
+
+#Modularity/HeaderFile[[#^quote70]]
+
+- 传统上，我们将指定代码接口的声明放在文件中，我们就认为这是一个模块，其名称表明了它的预期用途
+
+> Traditionally, we place declarations that specify the interface to a piece of code we consider a module in a file with a name indicating its intended use. ^quote70
+
+```c++
+// Vector.h
+class Vector {
+public:
+	Vector(int s);
+	double& operator[] (int i);
+	int size();
+private:
+	double* elem;
+	int sz;
+}
+```
+
+- User can use \#include that file, called a header file, to access that interface
+
+```c++
+// user.cc
+#include "Vector.h"
+#include <cmath>
+
+double sqrt_sum(const Vector& v) {
+	double sum = 0;
+	for (int i = 0; i != v.size(); ++i)
+		sum += std::sqrt(v[i]);
+	return sum;
+}
+```
+
+> [!tip] 为了帮助编译器确保一致性。提供Vector实现的.cc文件还将包括提供其接口的.h文件
+
+```c++
+// Vector.cc
+#include "Vector.h"  // get Vector's interface
+
+Vector::Vector(int s): elem {new double[s]}, sz {s} {  
+  
+}  
+  
+double &Vector::operator[](int i) {  
+    return elem[i];  
+}  
+  
+int Vector::size() {  
+    return sz;  
+}
+```
+
+> [!tip] 自行编译的.cpp文件(包括\#includes的h文件)称为翻译单元
+
+![[SeparateVector.png]]
+
+#Modularity/HeaderFile/weakness[[#^quote71]]
+
+- 使用头文件和\#include是一种非常古老的模拟模块化的方式，具有明显的缺点
+
+> The use of header files and **#include** is a very old way of simulating modularity with significant disadvantages ^quote71
+
+- 从编译时间上来看：
+	- 如果你#include的头文件中有101个翻译单元，那么该header.h的文本将会被编译器执行101次 -> 很显然，这极大的使得程序臃肿且耗时巨大
+- 从顺序依赖关系上来看：
+	- 如果我们在header2.h之前#include header1.h，那么header1.h中的声明和宏可能会影响header2.h中代码的含义。相反的如果在header1.h前面#include header2.h，那么header2.h中的声明和宏可能会影响header1.h中的代码
+- 从二义性(不一致性)上来看：
+	- 在一个文件中定义了一个实体(如类型或者函数)，然后在另一个文件定义它(但是略有不同)，这可能导致崩溃或者细微错误。如果我们(无意或有意)在两个源文件中分别声明一个实体，而不是放置在头文件中，或者通过不同头文件之间的顺序依赖关系，都有可能发生这种情况
+- 可传递性：
+	- 在头文件中表达声明所需的所有代码都必须出现在该头文件中，这导致了大量代码膨胀，因为头文件#include其他头文件，并且导致了头文件的使用者(无意或有意地)变得依赖于这样的实现细节
+
+> [!todo] We can use a skill to explain the Transivity
+
+```c++
+#include <iostream>
+
+int main() {
+	std::cout << "hello world" << std::endl;
+	return 0;
+}
+```
+
+- We can see the file just a print statment with iostream header file
+
+```linux
+$ g++ -E test.cc -o test.i
+$ cat -10 test.i
+1 # 1 "test.cc"                                                             
+2 # 1 "<built-in>"
+3 # 1 "<command-line>"
+4 # 1 "/usr/include/stdc-predef.h" 1 3 4
+5 # 1 "<command-line>" 2
+6 # 1 "test.cc"
+7 # 1 "/usr/include/c++/9/iostream" 1 3
+8 # 36 "/usr/include/c++/9/iostream" 3
+9 
+10 # 37 "/usr/include/c++/9/iostream" 3
+11 
+12 # 1 "/usr/include/x86_64-linux-gnu/c++/9/bits/c++config.h" 1 3
+13 # 256 "/usr/include/x86_64-linux-gnu/c++/9/bits/c++config.h" 3
+14 
+15 # 256 "/usr/include/x86_64-linux-gnu/c++/9/bits/c++config.h" 3
+16 namespace std
+// ...
+28636 # 2 "test.cc" 2
+28637 
+28638 
+28639 # 3 "test.cc"
+28640 int main() {
+28641     std::cout << "hello world" std::endl;
+28642     return 0;
+28643 } 
+```
+
+> [!warning] now, you should know clearly why the transitivity is a disadvantage
+
+### 3.2.2 Modules
+
