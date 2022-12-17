@@ -1076,3 +1076,415 @@ $ cat -10 test.i
 
 ### 3.2.2 Modules
 
+#Modularity/Modules[[#^quote72]]
+
+```c++
+// For C++20, use model to take place the header file
+// in Vector.cppm
+export module Vector; // defining the module called "Vector"  
+  
+export class Vector {  
+public:  
+    Vector(int s);  
+    double& operator[] (int i) const;  
+    int size() const;  
+private:  
+    double* elem;  
+    int sz;  
+};  
+  
+Vector::Vector(int s): elem {new double[s]}, sz {s} {}  
+  
+double &Vector::operator[](int i) const {  
+    return elem[i];  
+}  
+  
+int Vector::size() const {  
+    return sz;  
+}  
+  
+export bool operator== (const Vector& v1, const Vector& v2) {  
+    if (v1.size() != v2.size())  
+        return false;  
+    for (int i = 0; i < v1.size(); i++)  
+        if (v1[i] != v2[i])  
+            return false;  
+    return true;  
+}
+```
+
+> [!example] The Model Defining Order ^quote72
+> 1. 必须将文件命名为 .cppm
+> 2. 使用**export**关键字，使得model能够被外部可见，其中**export model**是声明模块
+> 3. 里面的每一个函数、类都必须用**export**关键字声明
+
+- This defines a **module** called **Vector**, which exports the class **Vector**, all its member functions, and the non-member function defining operator **\=\=**.
+
+```c++
+// The way we use this model we defined
+// in Vector.cc
+import Vector;  
+#include <cmath>  
+  
+double sqrt_sum(const Vector& v) {  
+    double sum = 0;  
+    for (int i = 0; i != v.size(); i++)  
+        sum += std::sqrt(v[i]);  
+    return sum;  
+}  
+  
+int main() {  
+    Vector v(5);  
+    sqrt_sum(v);  
+    return 0;  
+}
+```
+
+> [!example] The Model Use Order
+> 1. import必须在#include的前面
+> 2. 通过**import**关键字来引出model
+
+#Modularity/Modules/work[[#^quote73]]
+
+- 头文件与模块的差异不仅仅是在语法上的
+	- 模块只会被编译一次(而不是在每一个使用它的翻译单元中编译) -> 解决了重复编译以及臃肿的问题
+	- 模块之间能够任意顺序导入，这不会使得先导入的模块影响后导入的模块
+	- 如果将某些内容导入或#include进模块中，则使用模块的用户不会隐式地访问(也就是说不会受以下问题的困扰)：**import是不可传递的，也就是说，当你import一个model，不会像include一样一股脑的全部代入，而是你使用什么，引入什么**
+
+> The differences between headers and modules are not just syntactic.
+>> A module is compiled once only (rather than in each translation unit in which it is used).
+>> Two modules can be **import**ed in either order without changing their meaning.
+>> If you **import** or **#include** something into a module, users of your module do not implicitly gain access to (and are not bothered by) that: **import** is not transitive. ^quote73
+
+- **import model**在可维护性和编译时间上的成效是十分显著的，比如：
+	- 如果我执行一个程序"Hello World！"，使用**import std**比使用**include \<iostream>** 的编译时间快了十倍不止
+
+> [!bug] Unfortunately, **module std** is not part of C++20.
+
+![[Module model.png]]
+
+> 编译器将模块的接口(由**export**关键字指定)与其实现的详细信息分隔开。因此Vector接口通常由编译器生成，不再由用户显示命名
+
+```c++
+#include <iostream>  
+#include <vector>  
+export module vector_printer;  
+  
+export template <typename T>  
+void print(std::vector<T>& v) { // this is the (only) function seen by users  
+    std::cout << "{\n";  
+    for (const T& val : v) {  
+        std::cout << " " << val << "\n";  
+    }  
+    std::cout << "}";  
+}
+```
+
+## 3.3 Namespaces
+
+#Modularity/Namespace[[#^quote74]]
+
+- C++提供了命名空间作为表达某些声明属于一起并且他们的命名不会和其他命名发生冲突的机制
+
+> C++ offers _namespaces_ as a mechanism for expressing that some declarations belong together and that their names shouldn’t clash with other names. ^quote74
+
+```c++
+namespace My_code {
+	class complex {
+		// ...
+	};
+	int main();
+}
+
+int main() {
+	reurn My_code::main();
+}
+```
+
+- 我们可以看见，在**namespace**中的main函数是属于**My_code::** 的，而在外部的main函数，属于**std::** ，因此，他们不会发生冲突。
+
+#Modularity/Namespace/using[[#^quote75]]
+
+- 如果重复限定名称变得乏味或者分散注意力，我们可以使用**using**关键字去声明将该名称纳入范围
+
+> If repeatedly qualifying a name becomes tedious or distracting, we can bring the name into a scope with a _using-declaration_ ^quote75
+
+```c++
+void my_code(vector<int>& x, vector<int>& y) {
+	using std::swap; // make the standard-library swap available locally
+	// ...
+	swap(x, y); // std::swap
+	ohther::swap(x, y); // some other swap
+}
+```
+
+- using声明使命名空间中的名称可用，就像在其声明的范围中声明一样
+
+#Modularity/Namespace/namespace[[#^quote76]]
+
+ - 为了访问标准库命名空间中的所有名称，我们可以使用using指明：**using namespace std**
+
+> To gain access to all names in the standard-library namespace, we can use a _using-directive：**using namespace std** ^quote76
+
+```c++
+#include <iostream>
+
+using namespace std;
+
+int main() {
+	cout << "hello world" << std::endl;
+	return 0;
+}
+```
+
+> [!warning] 重要的是，命名空间声明的使用**不会影响模块的用户(内部)**， 因此using作为了模块本地的实现细节来处理 -> **因此不会使得代码膨胀**
+
+#Modularity/Namespace/weakness[[#^quote77]] 
+
+- 但是，使用**using指明空间**，我们将失去有选择地使用该命名空间中名称的能力，因此需要谨慎使用
+
+> By using a **using**-directive, we lose the ability to selectively use names from that namespace, so this facility should be used carefully ^quote77
+
+## 3.4 Function Arguments and Return Values
+
+#Modularity/Function[[#^quote78]] 
+
+- **将信息从程序中的一个部分传递到另一个部分的主要和推荐的方式是通过函数调用**。执行任务所需要的信息作为参数传递给函数，生成的结果作为返回值传回
+
+> The primary and recommended way of passing information from one part of a program to another is through a function call. Information needed to perform a task is passed as arguments to a function and the results produced are passed back as return values. ^quote78
+
+```c++
+int sum(const vector<int>& v) {
+	int s = 0;
+	for (const int i : v) 
+		s += i;
+	return s;
+}
+
+vector fib = {1, 2, 3, 5, 8, 13, 21};
+int x = sum(fib); // x becomes 53
+```
+
+- 还有其他途径可以在函数之间传递信息，比如**全局变量和类对象中的共享状态(这将会在第五章讲到)**。**标准中，尽量不要将全局变量作为已知的错误来源，并且状态通常应该仅在联合实现定义良好的抽象的函数之间共享** -> 比如，类的成员函数
+
+#Modularity/Function/type[[#^quote79]]
+
+- 鉴于在函数之间传递信息的重要性，有多种方法可以做到这一点就不足为奇了：
+	- 该对象是复制的，还是共享的？
+		- -> 复制和共享，分别对应的**传值**和**传地址/引用**
+	- 如果该对象是共享的，那么它可变吗？
+		- -> **传地址/引用可以通过改变形参的值来对原对象产生影响**
+	- 该对象是可移动的，那么移动之后留下来的空对象怎么办？
+		- -> 这里涉及到一个知识点：**右值引用和移动的概念**，其将在第六章讲解
+
+> Given the importance of passing information to and from functions, it is not surprising that there are a variety of ways of doing it. 
+>> 1. Is an object copied or shared? 
+>> 2. If an object is shared, is it mutable?
+>> 3. Is an object moved, leaving an “empty object” behind? ^quote79
+
+> [!tip] **参数的传递和值的返回默认行为都是”copide“**，但是很多情况下，”copied“能够隐式优化为**move(移动)**
+
+> [!warning] **如果函数不需要修改参数值，且你使用了引用/指针作为参数，那么请加上const，以const-reference的形式传递**
+
+### 3.4.1 Argument Passing
+
+#Modularity/Argument[[#^quote80]]
+
+- **当我们考虑性能的时候，我们经常在传递比较小的值时使用pass-by-value(值传递)，传递较大的值时使用pass-by-reference(传引用)**
+
+> When we care about performance, we usually pass small values by-value and larger ones by-reference. ^quote80
+
+> [!tip] 这里的"small"，指的是”**复制起来开销很小的东西**“。**"small"的具体含义取决与机器架构**
+
+
+#Modularity/Argument/default[[#^quote81]]
+
+- 函数参数具有默认值的情况并不少见; 也就是说，被视为首选值或许只是其是最常见的值。
+
+> It is not uncommon for a function argument to have a default value; that is, a value that is considered preferred or just the most common. ^quote81
+
+```c++
+void print(int value, int base = 10); // print value in base "base"
+
+print(x, 16); // hexadecimal
+print(x, 60); // sexagesimal(Sumerian)
+print(x); // use the default: decimal
+```
+
+> [!warning] **默认参数只能从右至左， 且中间不能间隔**
+
+```c++
+void print(int a, int b, int c = 10); // Ok
+void print(int a = 1, int b, int c = 0); // error
+void print(int a = 1, int b, int c); // error
+```
+
+### 3.4.2 Value Return 
+
+#Modularity/Value[[#^quote82]]
+
+- 只有当我们想要授予调用者访问本地函数内容的权限时，我们才会返回"by reference"
+
+> We return “by reference” only when we want to grant a caller access to something that is not local to the function ^quote82
+
+```c++
+double Vector::operator[] (int i) {
+	return elem[i];
+}
+```
+
+> [!bug] 注意：如果你想要用"by reference"的方式返回一个函数内的局部变量，这是不应该的，或者使用”**移动**"来解决这一问题
+
+```c++
+int& bad() {
+	int x;
+	// ...
+	return x; // bad: return a reference to the local variable x
+}
+```
+
+- 但是如果你很想返回一个本地的变量，那么可以使用返回一个指针来解决这件事。**但是，就目前来说，移动构造是最为高效且便捷的方式** -> 而且，返回一个指针需要承担的代价不仅仅如此，为什么C/C++被深恶痛绝，归根结底就是指针的复杂程度，一旦大量使用指针，我们很难发现指针的错误
+
+### 3.4.3 Return Type Deduction
+
+#Modularity/ReurnType[[#^quote83]]
+
+- 一个函数的返回值类型能够从函数的返回值中推导出来
+
+> The return type of a function can be deduced from its return value. ^quote83
+
+```c++
+auto nul(int i, double d) { // here, "auto" means "deduce the type"
+	return i * d; 
+}
+```
+
+- 这在很多时候很便利，特别是对于**范型函数(第7章)** 和 **lambda表达式**。 但是也应该谨慎的使用，**因为推导的类型不能提供一个稳定的接口：也就是说，改变函数(或者lambda)的实现可以改变其类型**
+
+### 3.4.4 Suffix Return Type
+
+#Modularity/SuffixType[[#^quote84]]
+
+- 然而，有时我们需要查看参数来确定结果的类型。返回类型推导就是一个例子(但也不是唯一的例子)。
+- 我们允许将返回类型添加到参数列表之后，**即我们虚妄显示声明返回值类型的位置**，这也使得"auto"意味着"**返回值类型将在后面提到或者被推导出来**" 
+
+> However, sometimes we need to look at the arguments to determine the type of the result. Return type deduction is one example of that, but not the only one. Consequently, we allow adding the return type after the argument list where we want to be explicit about the return type. That makes **auto** mean “the return type will be mentioned later or be deduced.” ^quote84
+
+```c++
+auto mul(int i, double d) -> double {
+	return i * d;
+}
+```
+
+> [!tip] 事实上，现代高级语言(如：Rust，Golang等)都是后置返回类型，由于C++的历史包袱，因此才一直采用了基于C、Fortran等语言的前置声明
+
+### 3.4.5 Structured Binding(C++ 17)
+
+#Modularity/Structured[[#^quote85]]
+
+- 我们都知道，**一个函数只能返回一个值**，但是这个值可以是带有很多成员变量的类对象。这就允许了我们优雅地返回多个值
+
+> A function can return only a single value, but that value can be a class object with many members. This allows us to elegantly return many values. ^quote85
+
+```c++
+struct Entry {  
+    std::string name;  
+    int value;  
+};  
+  
+auto read_entry(std::istream& is) -> Entry {  
+    std::string str;  
+    int i;  
+    is >> str >> i;  
+    return {str, i};  
+}  
+  
+auto e = read_entry(std::cin);
+```
+
+- 我们可以看到，通过结构体能够实现多个值的返回，e通过索引：**e.name or e.value**就能够获取到返回的值
+
+> [!tip] 但是，C++ 17中，给我们提供了一种类似“解包”的概念 -> (事实上，包括Python、Rust等语言早已支持)
+
+```c++
+auto [str, v] = read_entry(std::cin);
+```
+
+- **auto [str, v]声明了两个局部变量str，v，他们的类型是从read_entry()中的返回类型推导出来的。这种为类对象成员变量提供了局部变量的机制叫做 -> Structured Binding(结构化绑定)**
+
+```c++
+auto incr(std::map<std::string, int>& m) {  
+    for (auto& [key, value] : m) {  
+        ++value;  
+    }  
+}
+```
+
+#Modularity/Structured/work[[#^quote86]]
+
+- 当结构化绑定用于没有私有数据的类时，很容易看出绑定是如何完成的：**为绑定定义的变量的数量必须和类对象中的成员变量数量相同，且绑定中引入的每个变量都为相应的成员命名** -> 也就是说，通过数量相同的局部变量来接受，其类型由编译器自动推导
+
+> When structured binding is used for a class with no private data, it is easy to see how the binding is done: there must be the same number of names defined for the binding as there are data members in the class object, and each name introduced in the binding names the corresponding member. ^quote86
+
+> [!tip] 特别的，结构化绑定和显式的使用复合对象(m.member)相比，**代码的效率和质量上是没有任何差距的**。特别是，使用结构化绑定不意味着“copy”了结构体。反而，**简单结构提的返回很少涉及到“copy”，因为简单返回类型可以直接在需要他们的位置构造。**
+
+- 在A tour of C++ 3rd中，有着：A **complex** has two data members, but its interface consists of access functions, such as **real()** and **imag()**. Mapping a **complex\<double\>** to two local variables, such as **re** and **im** is feasible and efficient, but the technique for doing so is beyond the scope of this book.
+
+> **可能是我理解有误，我无法通过上述所说：“使用类中的成员函数访问器 real()和imag()来实现对私有成员的绑定。查阅资料后，找到了另一种实现方法，但是比较复杂”**
+
+```c++
+template <typename T>  
+class complex;  
+  
+template<>  
+class std::tuple_size<complex<double>>  
+    : public std::integral_constant<size_t, 2> {};  
+  
+template <>  
+class std::tuple_element<0, complex<double>> {  
+public:  
+    using type = double;  
+};  
+  
+template <>  
+class std::tuple_element<1, complex<double>> {  
+public:  
+    using type = double;  
+};  
+  
+template <typename T>  
+struct complex {  
+    complex(T _re, T _im): re {_re}, im {_im} {}  
+    complex<T>& operator+ (T d) {  
+        this->re += d;  
+        return *this;  
+    }  
+public:  
+    template<size_t Index>  
+    std::tuple_element_t<Index, complex<double>> &get() &;  
+private:  
+    T re;  
+    T im;  
+};  
+  
+template<> template <>  
+std::tuple_element_t<0, complex<double>> &complex<double>::get<0>() & {  
+    return re;  
+}  
+  
+template <> template <>  
+std::tuple_element_t<1, complex<double>> &complex<double>::get<1>() & {  
+    return im;  
+}
+
+complex<double> z = {1, 2};  
+auto& [re, im] = z + 2; // use it, the re become 3, and im is still 2
+std::cout << re << " " << im << "\n";
+```
+
+> [!todo] 想要实现上述代码逻辑，首先使用std::tuple -> 特化tuple_size和tuple_element，但由于现在还没学，无法进行讲解，只能看后续学到后，再返回来解决
+
+# 4. Error Handling
+
+## Introduction
+
