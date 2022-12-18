@@ -1486,5 +1486,124 @@ std::cout << re << " " << im << "\n";
 
 # 4. Error Handling
 
-## Introduction
+## 4.1 Introduction
+
+#ErrorHanding/Introduction[[#^quote87]]
+
+-  **错误处理是一个庞大而复杂的主题，其关注点和影响都远远超出了语言设施本身，而涉及到编程技术和工具**。然而，C++提供了一些功能来帮助，其主要工具是类型系统本身。
+
+> Error handling is a large and complex topic with concerns and ramifications that go far beyond language facilities into programming techniques and tools. However, C++ provides a few features to help. The major tool is the type system itself. ^quote87
+
+- 我们不需要费力地再从内置类型和语句中构建应用程序，而是构建适合我们程序的类型(**例如STL库中都string、map和算法sort()、find_if()等**)。这样的高级构造简化了我们都变成，限制了我们出错的机会，并且增加了编译器捕获错误的机会。**大多数C++语言构造都致力于设计和实现优雅高效的抽象，而使用这一种抽象都效果是：可以检测到运行时错误都点和可以处理错误都点是分开都**
+
+## 4.2 Exceptions
+
+#ErrorHanding/Exceptions[[#^quote88]]
+
+- 假定超出范围的访问是一种我们希望从中恢复的错误，其解决方案是让Vector实现者检测尝试超出范围的访问并且告知用户，然后用户可以采取适当的操作去解决这个问题。
+
+> Assuming that out-of-range access is a kind of error that we want to recover from, the solution is for the **Vector** implementer to detect the attempted out-of-range access and tell the user about it. The user can then take appropriate action. ^quote88
+
+```c++
+double& Vector::operator[] (int i) {
+	if (!(0 < i && i < size()))
+		throw out_of_range {"Vector::operator[]"};
+	return elem[i];
+}
+```
+
+- **throw**将控制转移到某个直接或间接调用Vector::operator\[\]()的函数中的out_of_range类型异常的处理程序。**为此，实现将根据需要展开函数调用堆栈，以返回调用方的上下文。也就是说，异常处理机制将根据需要退出作用域和函数，以返回对处理此类异常表示兴趣的调用方，并根据需要调用析构函数**
+
+```c++
+#include "Vector/Vector.h"  
+  
+void f(Vector& v) {  
+    try { // out_of_range exception thrown in this block are handle by the handle define below  
+        // computer 1... might try to access beyond the end of v        
+        double a = v[7]; // might try to access beyond the end of v  
+        // computer 2... might try to access beyond the end of v    
+    }catch (const std::out_of_range& exception) {  
+        std::cerr << exception.what() << "\n";  
+    }  
+}  
+  
+int main() {  
+    Vector v(5);  
+    f(v);  
+    return 0;  
+}
+```
+
+- 我们将可能出现异常的代码放入”**try-block**“语句中，对compute1、compute2,以及中间的v\[7\]的调用表示了**那些不容易提前确定是否发生"cou_of_range"错误的代码。”catch“子句用于处理"out_of_range“类型的异常(但是事实上，catch可用于处理任何可捕获的异常)。**
+
+> [!tip] 如果在f()中处理异常起来很麻烦，那我们就不要在f()中使用"**try-block**"，而是让异常隐式传递给f()的调用者
+
+#ErrorHanding/Exceptions/define[[#^quote89]]
+
+- **out_of_range**类型是在标准库中定义的(**\<stdecept\>**)，实际上被一些标准库容器访问函数使用
+- 通过引用捕获异常以避免复制，并使用**what()** 函数在抛出点打印放入其中的错误信息
+
+> The **out_of_range** type is defined in the standard library (in **\<stdexcept\>**) and is in fact used by some standard-library container access functions.
+> I caught the exception by reference to avoid copying and used the **what()** function to print the error message put into it at the **throw**-point. ^quote89
+
+- 使用异常处理机制可以使错误处理变得更简单、更系统、更可读。要做到这一点，**就不能过度使用try语句。** 在许多程序中，**抛出和可以处理抛出异常的函数往往有几十个函数的调用**。因此，大多数函数应只允许异常在调用堆栈中传播。
+
+> [!tip] 在后面第五章中，解释了使用错误处理变得更简单和系统都主要技术(称为**Resource Acquisition Is Initialization(资源获取即初始化RAII)**)。RAII背后的基本思想是让构造函数获取类操作所需要的资源，并让析构函数释放所有资源，从而使资源释放得到保证和隐蔽
+
+## 4.3 Invariants
+
+#ErrorHanding/Invariants[[#^quote90]]
+
+- 使用异常来表示超出范围的访问是一个函数检查其参数并拒绝执行都例子，因为基本假设(前提条件)不成立
+
+> The use of exceptions to signal out-of-range access is an example of a function checking its argument and refusing to act because a basic assumption, a _precondition_, didn’t hold. ^quote90
+
+- 每当我们定义一个函数时，我们都应该考虑它的前提条件是什么，并且考虑是否测试它们。对于大多数应用程序来说，测试简单的不变量是个好注意(参见第四章五小节)。
+- 就比如上述的**Vector::operator[] ()**，对于该函数来说，我们应该明确的知道其下标访问的范围应该是**\[a, b)** ，也就是说，a在其范围内，而b不在
+
+#ErrorHanding/Invariants/define[[#^quote91]]
+
+- 特别是，我们确实说了"**elem指向类型为双精度浮点数组sz**"，但是我们只是在注释中(或者说，我们的脑海中)说了这一点。对于一个类，这种假定为**True**的表述称为类不变式，或者简单称为不变式。
+
+> In particular, we did say “elem points to an array of sz doubles” but we only said that in a comment. Such a statement of what is assumed to be true for a class is called a class invariant, or simply an invariant. ^quote91
+
+- **构造函数的工作是为其类建立不变量(以便成员函数可以依赖它)，并确保成员函数在退出时保持不变量。** 不幸的是，在上述的Vector构造函数中只完成了部分工作，其确切地初始化了Vector成员，但是没有检查传递给它的参数是否有意义。
+
+```c++
+Vector v(-27);
+
+Vector::Vector(int s) {  
+    if (s < 0)  
+        throw std::length_error {"Vector constructor: negative size"};  
+    if ((elem = new double[s]) == nullptr)  
+        throw std::bad_alloc {};  
+    sz = s;  
+}
+
+void test(int n) {  
+    try {  
+        Vector v(n);  
+    }catch (const std::length_error& exception) {  
+        std::cerr << exception.what();  
+    }catch (const std::bad_alloc& exception) {  
+        std::cerr << exception.what();  
+    }  
+}
+
+test(-27); // throws length_error (-27 is too small)  
+test(10'0000'0000); // may throw bad_alloc  
+test(10); // likely OK
+```
+
+- 如果你请求的内存多于计算机提供的内存，或者程序已经消耗了绝大部分内存，然后你再次请求内存 -> 导致了消耗的内存超出了限制，则会发生内存耗尽。**但是注意，现代操作系统内存一次容纳的更多的空间，因此请求过多内存可能会导致在“bad_alloc”之前很久就严重变慢**
+
+#ErrorHanding/Invariants/exception[[#^quote92]]
+
+- 通常，一个函数在发生异常被抛出后无法继续执行其分配的任务。“**处理**”异常意味着执行一些最小的本地清理并重新抛出异常
+
+> Often, a function has no way of completing its assigned task after an exception is thrown. Then, “handling” an exception means doing some minimal local cleanup and rethrowing the exception. ^quote92
+
+- 在设计良好的代码中，“**try-block**”其实很少使用。通过系统地使用RAII技术来避免过度使用。而不变式的概念是类设计的核心，前提条件在函数设计中扮演着类似的角色：
+	- 制定不变式有利于我们准确地理解我们想要什么
+	- 不变式使我们具体化，这给了我们更好的机会使代码更好 -> **不变式要求我们，要对constructor考虑完善，这直接的使得代码变得严谨**
 
