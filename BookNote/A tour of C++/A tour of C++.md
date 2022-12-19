@@ -1607,3 +1607,173 @@ test(10); // likely OK
 	- 制定不变式有利于我们准确地理解我们想要什么
 	- 不变式使我们具体化，这给了我们更好的机会使代码更好 -> **不变式要求我们，要对constructor考虑完善，这直接的使得代码变得严谨**
 
+## 4.4 Error-Handing Alternatives
+
+#ErrorHanding/Alternative[[#^quote93]]
+
+- 错误处理是所有实际软件中的一个主要问题，因此，有很多方法来解决。如果检测到错误无法在函数内部处理，那么该函数就必须以某种方式将问题传递给某个调用方。**抛出异常是C++最通用的错误处理机制**
+
+> Error handling is a major issue in all real-world software, so naturally there are a variety of approaches. If an error is detected and it cannot be handled locally in a function, the function must somehow communicate the problem to some caller. Throwing an exception is C++’s most general mechanism for that. ^quote93
+
+- 异常被设计用于报告完成给定任务的失败。异常与构造函数和析构函数集成在一起，为错误处理和资源管理提供了一致的框架。
+
+#ErrorHanding/Alternative/code[[#^quote94]]
+
+- 编译器经过优化后，使得返回值比抛出相同都值作为异常的代价更小
+
+> Compilers are optimized to make returning a value much cheaper than throwing the same value as an exception. ^quote94
+
+- 抛出异常并不是报告无法在函数内部处理错误的唯一方法。函数也可以通过如下方式说明其无法完成分配的任务：
+	- 抛出异常
+	- 以某种方式返回一个表示失败的值
+	- 终止程序(通过调用terminate()、exit()或者abort()等函数)
+- 而我们在以下情况返回错误指示器(“**error code**”)：
+	- 该失败是能够预见和正常的 -> 例如，请求打开一个文件，则失败是很正常的(无权限或无该文件)
+	- 希望调用方合理且立即地处理预期中的错误 -> 例如：某个输入值有误，重新输入
+	- 一组并行任务中的其中一个发生了错误，我们需要知道哪一个发生了错误 -> 例如，游戏的几个选项，第一个失败返回1,第二个失败返回2...
+	- 系统的内存太少，以至于运行时对异常的支持会挤占基本功能
+- 而我们会在以下情况抛出异常：
+	- 这种错误不常见导致程序员很有可能会忘记检查 -> 例如，你经常检查printf()的返回值吗？
+	- 直接调用方无法处理错误。相反，必须将调用链渗透到“最终调用方” -> 如果你用过模板或者python，甚至java的话。**反复检查错误代码将很乏味、昂贵且容易出错。错误测试和将错误代码作为返回值传递很容易掩盖函数的主要逻辑**
+	- 错误代码没有可用的返回路径 -> 最常见的，构造函数没有返回值，想要处理就只能使用异常
+	- 函数的返回需要同时传递值和错误知识符(例如，pair), 可能导致使用外参数、非本地错误状态指示器或者其他变通方法
+	- ...
+- 而我们会在以下情况直接终止程序：
+	- 该错误是一种我们无法修复的错误 -> 例如，内存耗尽对于绝大部分系统都没有合理的方法解决
+	- 该系统的错误处理基于每当检测到重大错误时就会重新启动线程、进程甚至计算机
+
+#ErrorHanding/Exceptions/noexcept[[#^quote95]]
+
+- 确保终止的一种方法是将**noexcept**添加到函数中，使得该函数实现中任何地方的抛出都会变为**terminate()**
+
+> One way to ensure termination is to add **noexcept** (§[4.5.3](file:///OEBPS/ch04.xhtml#sec4_5_3)) to a function so that a **throw** from anywhere in the function’s implementation will turn into a **terminate()**. ^quote95
+
+> [!warning] 注意：有些应用程序不接受无条件终止，因此必须使用一种代替方案。用于常规用途的库都不应无条件终止
+
+- **不要认为所有的错误代码和异常都是坏的，他们都有着明确的用途。此外，也不要认为异常处理缓慢的传闻，它通常比正确处理复杂或罕见的错误条件以及重复测试错误代码更快**
+
+## 4.5 Assertions
+
+#ErrorHanding/Assertions[[#^quote96]]
+
+- 目前还没有编写不变式、前提条件等可选运行时测试的通用标准方法。然而，对于许多大型程序，又需要支持那些希望在测试时依赖大量运行时检查，且使用最小检查部署代码的用户
+
+> There is currently no general and standard way of writing optional run-time tests of invariants, preconditions, etc. However, for many large programs, there is a need to support users who want to rely on extensive run-time checks while testing, but then deploy code with minimal checks. ^quote96
+
+- 因此，我们不得不依靠临时机制。有很多这样的机制，并且它们灵活而通用，在未启动时意味着没有成本。
+
+```c++
+enum class Error_action { // error-handing alternatives  
+    ignore,  
+    throwing,  
+    terminating,  
+    logging  
+};  
+  
+// a default  
+constexpr Error_action default_Error_action = Error_action::throwing;  
+  
+enum class Error_code {  
+    range_error,  
+    length_error  
+};  
+  
+std::string error_code_name[] {"range error", "length error"};  
+  
+template <Error_action action = default_Error_action, class C>  
+constexpr void except(C cond, Error_code x) { // take "action" if the expected condition "cond" doesn't hold  
+    if constexpr (action == Error_action::logging)  
+        if (!cond())  
+            std::cerr << "expect() failure: " << int(x) << ' ' << error_code_name[int(x)] << "\n";  
+  
+    if constexpr (action == Error_action::throwing)  
+        if (!cond())  
+            throw x;  
+  
+    if constexpr (action == Error_action::terminating)  
+        if (!cond())  
+            std::terminate();  
+}
+```
+
+- 乍一看，这似乎令人难以置信，因为使用的许多语言功能还为体现出来。然而，**它确实十分灵活又易于使用**
+
+```c++
+double &Vector::operator[](int i) {  
+    except(
+	    [i, this]() -> bool { return 0 <= i && i < size(); }, 
+	    Error_code::range_error
+	);  
+    return elem[i];  
+}
+```
+
+- 可以看见上面的代码，检查下标是否在合法范围内，如果不在则采取默认操作**default_Error_action**抛出异常。而期望保持的条件，作为lambda表达式传递给expect()。**if constexpr在编译期完成，因此每次调用expect()最多执行一次运行时测试**。若将action设置为**Error_action::ignore**，则不会采取任何操作。
+
+> [!fail] **在许多系统中，断言机制(如expect())，提供对断言失败含义的单点控制非常重要。但是，在大型代码库中，搜索真正检查假设的if语句是不切实际的**
+
+### 4.5.1 assert()
+
+#ErrorHanding/Assertions/assert[[#^quote97]]
+
+- 在标准库中提供了调试宏：assert()，用于断言一个条件必须在运行时保持
+
+> The standard library offers the debug macro, **assert()**, to assert that a condition must hold at run time. ^quote97
+
+```c++
+void f(const char* p) {
+	assert(p != nullptr); // p must not be nullptr
+}
+```
+
+- 如果assert()的条件在“debug”下失败，程序会被中止。**但如果是在“release”下，却又不检查assert()**。**这是十分粗糙且暴力的，但是有总比没有好，不是吗**
+
+### 4.5.2 Static Assertions
+
+#ErrorHanding/Assertions/static_assert[[#^quote98]]
+
+- **异常报告通常在运行时发现错误，如果该错误能在编译期就被发现，这显然会更好**。所以，这就是类型系统和用于指定用户定义类型接口的工具的主要用途。当然，我们也可以对编译时已知的大多数属性执行简单检查，并将失败信息报告给编译器，以满足我们我们的期望
+
+> Exceptions report errors found at run time. If an error can be found at compile time, it is usually preferable to do so. That’s what much of the type system and the facilities for specifying the interfaces to user-defined types are for. However, we can also perform simple checks on most properties that are known at compile time and report failures to meet our expectations as compiler error messages. ^quote98
+
+```c++
+static_assert(4 <= sizeof(int), "integers are too small");
+```
+
+- 在此处，我们使用**static_assert(静态断言)**来断言**int**的大小。而**static_assert机制可用于任何用常量表达式表示的东西**
+
+```c++
+constexpr double C = 299792.458;
+
+void f(double speed) {
+	constexpr double local_max = 160.0 / (60 * 60); // 160 km/h == 160.0 / (60 * 60)
+	static_assert(speed < C, "can't go that fast"); // error, the speed must be a constexpr
+	static_assert(local_max < C, "can't go that fast"); // OK
+}
+```
+
+> [!tip] 当然，你也可以不需要自定义消息，使用编译器默认提供的错误信息 -> 错误源位置 + 断言谓词的字符表示形式。**而static_assert的一个重要作用就是对泛型编程中用作参数的类型进行断言** -> 这会在第八章和第十六章提到
+
+### 4.5.3 noexcept
+
+#ErrorHanding/Assertions/noexcept[[#^quote99]]
+
+- 一个函数如果不应该抛出异常就需要声明为**noexcept**
+
+> A function that should never throw an exception can be declared **noexcept**. ^quote99
+
+```c++
+void user(int sz) noexcept {
+	Vector v(sz);
+	itoa(&a[0], &a[sz], 1); // fill v with 1, 2, 3, ..
+}
+```
+
+- 如果我们为该代码设计的所有良好的意图和计划都失败了，user()仍然会抛出异常，那么就让其调用**std::terminate()**立即终止程序
+
+#ErrorHanding/Assertions/danger[[#^quote100]]
+
+** 如果你不假思索地在函数上添加了**noexcept**功能，这是相当危险的。如果**noexcept**函数调用了一个会抛出异常的函数，并且希望其能捕获并处理该异常，而由于**noexcept**的存在，会将其转化为一个致命错误从而迫使编译器通过某种形式的错误代码来处理错误，而这种错误可能是复杂的、容易出错的和开销巨大的。**noexcept应该清晰和谨慎地使用**
+
+> Thoughtlessly sprinkling **noexcept** on functions is hazardous. If a **noexcept**function calls a function that throws an exception expecting it to be caught and handled, the **noexcept** turns that into a fatal error. Also, **noexcept** forces the writer to handle errors through some form of error codes that can be complex, error-prone, and expensive. Like other powerful language features, **noexcept** should be applied with understanding and caution. ^quote100
+
