@@ -166,7 +166,7 @@ void print(double) { //... }
 - **类型的大小是由实现定义的**。
 	- 因此，不同机器上对其的实现不同，其表现的类型大小也不尽相同
 
-> The size of a type is implementation-defined (i.e., it can vary among different machines)^quote19
+> The size of a type is implementation-defined (i.e., it can vary among different machines) ^quote19
 
 #Variables/tip[[#^quote20]]
 
@@ -1776,4 +1776,505 @@ void user(int sz) noexcept {
 ** 如果你不假思索地在函数上添加了**noexcept**功能，这是相当危险的。如果**noexcept**函数调用了一个会抛出异常的函数，并且希望其能捕获并处理该异常，而由于**noexcept**的存在，会将其转化为一个致命错误从而迫使编译器通过某种形式的错误代码来处理错误，而这种错误可能是复杂的、容易出错的和开销巨大的。**noexcept应该清晰和谨慎地使用**
 
 > Thoughtlessly sprinkling **noexcept** on functions is hazardous. If a **noexcept**function calls a function that throws an exception expecting it to be caught and handled, the **noexcept** turns that into a fatal error. Also, **noexcept** forces the writer to handle errors through some form of error codes that can be complex, error-prone, and expensive. Like other powerful language features, **noexcept** should be applied with understanding and caution. ^quote100
+
+# 5. Classes
+
+## 5.1 Introduction
+
+- 略
+
+### 5.1.1 Classes
+
+#Class/Introduction/classes[[#^quote101]]
+
+- C++的核心语言特征是**class**。**class**是用户自定义的类型，用于表示程序代码中的实体。
+
+> The central language feature of C++ is the _class_. A class is a user-defined type provided to represent an entity in the code of a program. ^quote101
+
+- 每当我们的程序设计有一个有用的想法、实体、数据集合等时，我们都会尝试将其表示为程序中的一个类，以便该想法在代码中体现，而不仅仅是在我们的头脑、设计文档甚至一些注释中。
+
+> [!tip] **由一组精心挑选的类构建的程序比直接根据内置类型构建所有内容的程序更容易理解和正确**。特别是，类通常是库提供的。
+
+## 5.2 Concrete Type
+
+#Class/ConcreteType[[#^quote102]]
+
+- 具体类的基本思想就是**它们的行为“就像内置类型一样”**
+
+> The basic idea of _concrete classes_ is that they behave “just like built-in types.” ^quote102
+
+- 例如：复数类型和无限精度整数很像内置类型的“int”， 当然，它们有着自己的语义和运算集。类似的，**vector**和**string**很想内置数组，只是他们更灵活，行为更好
+
+#Class/ConcreteType/work[[#^quote103]]
+
+- **具体类型的定义特征是其表示定义的一部分**。
+
+> The defining characteristic of a concrete type is that its representation is part of its definition. ^quote103
+
+- 在很多情况下，例如**vector**，**该表示只是存储在其他地方数据的一个或多个指针，但该表示存在于具体类的每个对象中。这允许实现在空间和时间上达到最佳效率**。
+- 并且，其允许：
+	- 将具体类型的对象放置在堆栈上、静态分配的内存中或者其他对象中
+	- 直接引用对象(**而不仅仅是通过指针或者引用**)
+	- 立即完整地初始化对象
+	- 拷贝或者移动对象
+- 且该表示可以是私有的，并且只能通过成员函数访问(**但其必须是存在的**)。因此，**如果表示形式有任何重大变化，用户必须重新编译。这是让具体类型的行为和内置类型完全相同所需要付出的代价**。对于不经常变化的类型，使用局部变量提供必须的清晰度和效率，这是可以接受的，并且通常是很理想的。**为了增加灵活性，具体类型可以将其表示的主要部分保存在自由存储区(动态内存、堆)上，并通过存储在类对象本身中的部分来访问它们**。这也是**vector**和**string**的实现方式。
+
+### 5.2.1 An Arithmetic Type
+
+```c++
+class complex {  
+public:  
+    complex(double re, double im): _re {re}, _im {im} {}  
+    complex(double re): _re {re}, _im {0} {}  
+    complex(): _re {0}, _im {0} {}  
+    complex(const complex& z): _re {z._re}, _im {z._im} {}  
+public:  
+    double real() const { return _re; }  
+    double imag() const { return _im; }  
+    void real(double re) { _re = re; }  
+    void imag(double im) { _im = im; }  
+public:  
+    complex& operator+= (complex z) {  
+        _re += z._re;  
+        _im += z._im;  
+        return *this;  
+    }  
+    complex& operator-= (complex z) {  
+        _re -= z._re;  
+        _im -= z._im;  
+        return *this;  
+    }  
+    complex& operator*= (complex z);  
+    complex& operator/= (complex z); 
+    complex operator+ (complex z) {  
+    complex temp = *this;  
+	    return temp += z;  
+	}  
+	complex operator- (complex z) {  
+	    complex temp = *this;  
+	    return temp -= z;  
+	}  
+	complex operator* (complex z) {  
+	    complex temp = *this;  
+	    return temp *= z;  
+	}  
+	complex operator/ (complex z) {  
+	    complex temp = *this;  
+	    return temp /= z;  
+	}  
+	bool operator== (complex z) { return this->real() == z.real() && this->imag() == z.imag(); }  
+	bool operator!= (complex z) { return !(*this == z); } 
+private:  
+    double _re;  
+    double _im;  
+};
+```
+
+#Class/ConcreteType/complex[[#^quote104]]
+
+- 除了逻辑需求之外，**complex必须是有效的**，否则其将不会被使用。**这意味着简单操作必须“inline”。也就是说，生成的机器代码中，必须在没有函数调用的情况下实现简单操作(例如构造函数，+=和imag())。默认情况下，类中定义的函数是“inline”的。**
+- 通过在函数声明前加关键字**“inline”**，可以显示请求内联。
+
+> In addition to the logical demands, complex must be efficient or it will remain unused. This implies that simple operations must be inlined. That is, simple operations (such as constructors, +=, and imag()) must be implemented without function calls in the generated machine code. Functions defined in a class are inlined by default. It is possible to explicitly request inlining by preceding a function declaration with the keyword inline. An industrial-strength complex (like the standard-library one) is carefully implemented to do appropriate inlining. ^quote104
+
+> [!tip] 我们知道，**C++允许类实现类似于内置类型的操作。但是这些操作一般都很简短且经常重复使用。** **而将这些函数定义为“inline”之后，以牺牲空间的方式来节省函数调用的开销** -> 也就是说，这样更接近于内置类型的普通操作
+
+- **拷贝赋值和拷贝构造都是隐式定义的**
+- **无需参数即可调用的构造函数被成为默认构造函数**。通过默认构造函数，能够使得类型未初始化的情况不再发生
+- **const说明符表示这些函数不会修改其调用的对象。** 可以为const和非const对象调用const成员函数，**但是只能由非const对象调用非const成员函数**
+
+```c++
+complex z = {1, 0};
+const complex cz {1, 3};
+z = cz;    // OK: assigning to a non-const variable
+cz = z;    //  error: assignment to a const
+double x = z.real();  // OK: complex::real() is const
+```
+
+- **编译器将涉及到的运算转化为适当的函数调用**。例如：c != b表示c.operator!= (b)
+- 用户定义的运算符(**"重载运算符"**)应该谨慎使用。**重载运算符语法由语言固定，因此不能定义“一元/”。此外，也无法更改内置类型运算符的含义。**
+
+### 5.2.2 A Container
+
+#Class/ConcreteType/container[[#^quote105]]
+
+- 容器是保存元素集合的对象
+
+> A _container_ is an object holding a collection of elements. ^quote105
+
+#Class/ConcreteType/destructor[[#^quote106]]
+
+- 在很多类中都有一个致命的缺陷：使用**new**分配元素，但从不释放它们(分配的空间)。这不是一个好注意，因为C++没有提供垃圾收集器来为新对象提供未使用的内存。在某些环境中，你不能使用收集器，并且处于逻辑或者性能的原因，你通常更喜欢更精确地控制销毁。因此，**我们需要一种机制来确保由构造函数分配的内存被释放，该机制是析构函数**
+
+> However, it does have a fatal flaw: it allocates elements using **new** but never deallocates them. That’s not a good idea because C++ does not offer a garbage collector to make unused memory available for new objects. In some environments you can’t use a collector, and often you prefer more precise control of destruction for logical or performance reasons. We need a mechanism to ensure that the memory allocated by the constructor is deallocated; that mechanism is a _destructor ^quote106
+
+```c++
+class Vector {
+public:
+	Vector (int s): elem {new double[s]}, sz {s} {
+		for (int i = 0; i != s; i++)
+			elem[i] = 0;
+	}
+	~Vector () { delete[] elem; }
+	double& operator[] (int i);
+	int size() const;
+private:
+	double* elem;
+	int sz;
+}
+```
+
+> [!tip] 析构函数前面是**\~**，其名字和类名一致
+
+```c++
+Vector gv(10); // global variable; gv is destroyed at the end of program
+
+Vector* gp = new Vector(100); // Vector on free store; never implicitly destroyed
+
+void fct(int n) {
+	Vector v(n);
+	// ...use v
+	{
+		Vector v2(2 * n);
+		// ...use v and v2
+	} // v2 is destroyed here
+	// ...use v
+} // v is destroyed here 
+```
+
+- **类在命名、作用域、分配、生存期等方面遵循与内置类型同样的规则**。
+
+#Class/ConcreteType/RAII[[#^quote107]]
+
+- 在构造函数中获取资源并在析构函数中释放它们的技术称为资源获取即初始化(**Resource Acquisition Is Initialization(RAII)**)
+
+> The technique of acquiring resources in a constructor and releasing them in a destructor, known as _Resource Acquisition Is Initialization_ or _RAII_. ^quote107
+
+- RAII允许我们消除 **“单独的new操作”**，也就是说，避免在一般代码中进行分配，并将其隐藏在行为良好的抽象实现中。同样，应该避免 **“单独的delete操作”**。避免单独的new和delete使代码更不容易出错，更容易避免资源泄漏。
+
+### 5.2.3 Initializing Containers
+
+#Class/ConcreteType/initialize[[#^quote108]]
+
+- 容器的存在是为了容纳元素，所以显然我们需要更方便的方法来将元素放入容器中
+	- initializer-list consturctor：initialize with a list of elements
+	- push_back()
+
+> A container exists to hold elements, so obviously we need convenient ways of getting elements into a container. ^quote108
+
+```c++
+class Vector {
+public:
+	Vector(); // default
+	Vector(std::initializer_list<double>); // initialize with a list
+	// ...
+	void push_back(double); // add element at end
+}
+```
+
+- 对于**push_back**来说，在最后插入一个任意的数是很轻松的
+
+```c++
+Vector read(std::istream& is) {
+	Vector v;
+	for (double d; is >> d; )
+		v.push_back(d);
+	return v;
+}
+
+Vector v = read(std::cin);
+```
+
+- 对于上述案例来说，返回一个Vector的代价可能是非常巨大的，但是我们可以通过**move construtor**来解决，这需要在后面才会有所体现。
+- 同时，用于**initializer-list constructor(初始化列表构造)**的 **std::initializer_list**是编译器已知的标准库类型：当我们使用**{}-list**时，编译器将创建一个**initializer_list**对象提供给程序
+
+```c++
+Vector v1 = {1, 2, 3, 4, 5}; 
+Vector v2 = {1.23, 3.45, 6.7, 8};
+```
+
+- 而初始化构造函数可以像这样写：
+
+```c++
+Vector::Vector(std::initializer_list<double> lst)
+	: elem {new double[lst.size()]}
+	, sz {static_cast<int>(lst.size())} {
+	std::copy(lst.begin(), lst.end(), elem);	
+}
+```
+
+> [!tip] 不幸的是，标准库使用**“unsigned int”**作为大小和下标，因此我们需要使用**static_cast**将初始化设定项列表的大小显示转化为int。 -> 事实上，这样的操作很丑陋且迂腐，因为你手写列表中的元素大于最大整数的可能性相当低(16位整型是32767, 32位整型是2147483647)
+
+- 但是，类型系统没有常识。他知道变量的可能值，而不是实际值，**所以它可能会在没有实际违反的地方报错**。这个的警告有时可以使程序员避免出现严重错误。
+
+#Class/ConcreteType/cast[[#^quote109]]
+
+- **static_cast**不检查它正在转换的值。程序员可以正确地使用，但是**这并不总是一个好的假设，所以如果对其有疑惑，就需要检查**。显示类型转换(通常称为类型转换，以提醒你使用他们支撑“损坏”的内容)。尝试仅对系统的最低级别使用未检查的强制转换。**他们很容易出错**
+
+> A **static_cast** does not check the value it is converting; the programmer is trusted to use it correctly. This is not always a good assumption, so if in doubt, check the value. Explicit type conversions (often called _casts_ to remind you that they are used to prop up something broken) are best avoided. Try to use unchecked casts only for the lowest level of a system. They are error-prone. ^quote109
+
+- 其他的类型强制转换包括**reinterpret_cast**和**bit_cast**，用于将对象简单地视为字节序列，以及**const_cast**用于“强制转换const”。明智的使用类型系统和设计良好的库允许我们在高级软件中消除未经检查的强制转换
+
+- for **const_cast**
+```c++
+// we all konw C string is a const char*
+string str = "hello";
+char* const_str = str.c_str(); // error: str.c_str() is a const char*
+char* non_const_str = const_cast<char*> (str.c_str()); // OK, const_cast<char*> conversion the char* to const
+```
+
+- for **static_cast**
+```c++
+int x = 0;
+double x1 = static_cast<double> (x);
+```
+
+- for **reinterpret_cast**
+```c++
+int* x = new int(10);
+double* x1 = reinterpret_cast<double*> (x);
+```
+
+- 注意：**reinterpret_cast**能够实现毫无关系的指针进行转换。
+
+## 5.3 Abstract Types
+
+#Class/AbstractType[[#^quote110]]
+
+- 诸如**complex**和**Vector**之类的类型被称为具体类型，因为它们的表示是其定义的一部分。在这方面，它们类似于内置类型。相反，抽象类型是将用户与实现细节完全隔离的类型。为此，我们将接口与表示分离，并放弃真正的局部变量。由于我们对抽象类型的表示一无所知(甚至不知道其大小)，我们必须在自由存储区上分配对象，并通过引用或者指针访问它们。
+
+> Types such as **complex** and **Vector** are called _concrete types_ because their representation is part of their definition. In that, they resemble built-in types. In contrast, an _abstract type_ is a type that completely insulates a user from implementation details. To do that, we decouple the interface from the representation and give up genuine local variables. Since we don’t know anything about the representation of an abstract type (not even its size), we must allocate objects on the free store and access them through references or pointers ^quote110
+
+```c++
+class Container {  
+public:  
+    virtual double& operator[] (int) = 0; // pure virtual function  
+    virtual auto size() -> int const = 0; // const member function  
+    virtual ~Container() {} // destructor  
+};
+```
+
+- 该类是稍后定义的特定容器的纯接口。**“virtual”** 关键字的意义是 **“以后可以在此类派生的类中重新定义”**。当然的，声明为**virtual**的函数称为**虚函数**。从**Container**派生的类提供了**Container**接口的实现。而 **=0**的语法表示该函数是纯虚的，也就是说**Container的派生类必须定义的函数。被称为纯虚函数**。因此，不可能定义仅为**Container**的对象
+
+```c++
+Container c; // error: there can be no objects of an abstract class
+Container p = new Vector_container(10); // OK: Container is an interface for Vector_container
+```
+
+> [!tip] 具有纯虚函数的类被称为抽象类
+
+```c++
+void use(Container& c) {
+	const int sz = c.size();
+	for (int i = 0; i != sz; i++)
+		std::cout << c[i] << "\n";
+}
+```
+
+- 此时，我们并不清楚c使用的size()和\[\]是哪一种类型提供了实现。**为各种其他类提供接口的类通常称为多态类型(polymorphic type)**
+
+- 同时，作为一个通用的抽象类，**Container**没有构造函数(也就是说，不需要自行定义)。毕竟，它没有任何要初始化的数据。另一方面，容器有一个析构函数，但是该析构函数是**virtual**的，因此**Container**的派生类可以提供实现。
+
+> [!warning] 抽象类一般只提供出接口，而非具体的实现
+
+```c++
+class Vector_container: public Container { // Vector_container implements  
+public:  
+    Vector_container(int s): v(s) {} // Vector of s elements Container  
+    ~Vector_container() {}  
+  
+    double& operator[] (int i) override { return v[i]; }  
+    auto size() -> int const override { return v.size(); }  
+private:  
+    Vector v;  
+};
+```
+
+- 对于**Container**和**Vector_container**通常被称为**base(基类)** 和 **dervied(派生/衍生类)** 或者**superclass(超类)** 和 **subclass(子类)**。
+- **override**关键字显示的声明了哪一些接口是需要重写的。**override**的使用是可选的，如果显示的声明了，那么编译器就会捕获错误，例如函数名的拼写错误或者虚函数的类型细微差异等等。
+
+> [!bug] 注意：**析构函数子类覆盖了基类的析构函数。而子类的析构函数默认隐式调用父类析构函数，如果你显式调用了，反而会出现预料之外的错误**
+
+## 5.4 Virtual Function
+
+```c++
+void use(Container& c) {
+	const int sz = c.size();
+	for (int i = 0; i != sz; i++)
+		std::cout << c[i] << "\n";
+}
+```
+
+#Class/Virtual/vbtl[[#^quote111]]
+
+- 在使用use()函数时，如何确定C的类型以及调用正确的函数是尤为关键的。要实现该解决方案，**Container**对象必须包含其在运行时选择要调用的正确函数的信息。**通常实现技术是编译器将虚函数的名称转化为指向函数的指针表的索引。该表通常称为vtbl来标识其虚函数**
+
+> How is the call **c[i]** in **use()** resolved to the right **operator[]()**? When **h()** calls **use()**, **List_container**’s **operator[]()** must be called. When **g()** calls **use()**, **Vector_container**’s **operator[]()** must be called. To achieve this resolution, a **Container** object must contain information to allow it to select the right function to call at run time. The usual implementation technique is for the compiler to convert the name of a virtual function into an index into a table of pointers to functions. That table is usually called the _virtual function table_ or simply the **vtbl**. Each class with virtual functions has its own **vtbl** identifying its virtual functions. ^quote111
+
+![[Virtual-vbtl.png]]
+
+- **vbtl中的函数允许正确使用对象，即使调用方不知道对象的大小及其数据布局，调用者的实现只需要知道容器中vbtl指针的位置以及每个虚函数所使用的索引。这种虚拟调用机制的效率几乎与正常函数调用机制一样高(在25%以内，对同一对象的重复调用开销要小得多)。它的空间开销是具有虚拟函数的类的每个对象中的一个指针加上每个此类的一个vbtl**
+
+## 5.5 Class Hierarchies
+
+#Class/hierarchies[[#^quote112]]
+
+- 类层次结构是在通过派生类创建的网格中有序排列的一组类。我们使用类的层次结构来表示具有层次关系的概念
+
+> A _class hierarchy_ is a set of classes ordered in a lattice created by derivation (e.g., **: public**). We use class hierarchies to represent concepts that have hierarchical relationships ^quote112
+
+![[Class Hierarchies.png]]
+
+- 箭头表示继承关系。例如：类Circle派生自类Shape。类层次结构通常从最基本的类(根)向下绘制，向(后来定义的)派生类增长
+
+- 我们先定义出所有类型的常规属性
+
+```c++
+class Point {  
+public:  
+    double x;  
+    double y;  
+};  
+  
+class Shape {  
+public:  
+    virtual Point center() const = 0; // pure virtual  
+    virtual void move(Point to) = 0;  
+  
+    virtual void draw() const = 0;  
+    virtual void rotate(int angle) = 0;  
+  
+    virtual  ~Shape() {}  
+};
+```
+
+- 然后定义一个特定的形状，且指定其特定的属性
+
+```c++
+class Circle: public Shape {  
+public:  
+    Circle(Point p, int rad): x {p}, r {rad} {} // constructor  
+    Point center() const override { return x; }  
+    void move(Point to) override { x = to; }  
+    void draw() const override;  
+    void rotate(int) override {}  
+private:  
+    Point x; // center  
+    int r; // radius  
+};
+```
+
+- 但其实，Circle也没有增加更多的东西
+
+```c++
+class Smiley: public Circle {  
+public:  
+    Smiley(Point p, int rad): Circle {p, rad}, mouth {nullptr} {}  
+    ~Smiley() {  
+        delete mouth;  
+        for (auto p : eyes)  
+            delete p;  
+    }  
+  
+    void move(Point to) override;  
+    void draw() const override;  
+    void add_eyes(Shape* s) {  
+        eyes.push_back(s);  
+    }  
+    void set_mouth(Shape* s);  
+    virtual void wink(int  i); // wink eye number  
+private:  
+    std::vector<Shape*> eyes; // usually two eyes  
+    Shape* mouth;  
+};
+
+void Smiley::draw() const {  
+    Circle::draw();  
+    for (auto p : eyes)  
+        p->draw();  
+    mouth->draw();  
+}
+```
+
+- 请注意：**Smiley** 将 **eyes** 放在**vector**中，并在析构函数中进行**delete**。**Shape**的析构函数是**virtual**修饰的。虚析构函数对于抽象类是必不可少的，因为派生类的对象通通过其抽象基类提供的接口进行操作。特别是，它可能被指向基类的指针进行**delete**操作。因此，虚函数调用机制确保调用正确的析构函数，然后，该析构函数隐式调用其基类和成员的析构函数。
+
+### 5.5.1 Benefits from Hierachies
+
+#Class/hierarchies/benifit[[#^quote113]]
+
+- 类层次结构提供了两个好处：
+	- 接口继承：派生类对象可以用于需要基类对象的任何地方。也就是说，基类充当派生类的接口 -> **此类通常是抽象类**
+	- 实现继承：基类提供简化派生类实现的函数或数据 -> **此类基类通常具有数据成员和构造函数**
+
+> A class hierarchy offers two kinds of benefits: 
+>> Interface inheritance: An object of a derived class can be used wherever an object of a base class is required. That is, the base class acts as an interface for the derived class. The **Container** and **Shape** classes are examples. Such classes are often abstract classes.
+>> Implementation inheritance: A base class provides functions or data that simplifies the implementation of derived classes. **Smiley**’s uses of **Circle**’s constructor and of **Circle::draw()** are examples. Such base classes often have data members and constructors. ^quote113
+
+- 具体类 -- 尤其是带有数据域的类 -- 很像内置类型：我们将其定义为局部变量，使用它们的名称访问，拷贝等等。类层次结构中的类是不同的：我们倾向于使用**new**在自由存储区中分配它们，并且通过指针或者引用访问。
+
+```c++
+Shape* read_shape(std::istream& is) {  
+    // read shape header from is and find its Kind k ...  
+    Kind k;  
+    switch (k) {  
+        case Kind::circle:  
+            // read circle data  
+            return new Circle {p, r};  
+        case Kind::traingle:  
+            // read traingle data {p1, p2, p3}  
+            return new Traingle {p1, p2, p3};  
+        case Kind::smiley:  
+            // read smiley data  
+            Smiley* ps = new Smiley {p, r};  
+            ps->add_eyes(e1);  
+            ps->add_eyes(e2);  
+            ps->set_mouth(m);  
+            return ps;  
+    }  
+}
+
+void user() {  
+    std::vector<Shape*> v;  
+    while (std::cin)  
+        v.push_back(read_shape(std::cin));  
+    draw_all(v); // call draw() for each element  
+    rotate_all(v, 45); // call rotate(45) for each element  
+  
+    for (auto p : v)  
+        delete p;  
+}
+```
+
+- 显然，这个例子被简化了 -- 尤其在错误处理方面 -- 但是它说明了user()完全不知道其操纵的哪一种类型。**user（）代码可以编译一次，然后用于添加到程序中的新形状。请注意，在user（）之外没有指向形状的指针，因此user（）负责释放它们。这是通过delete运算符完成的，并且严重依赖于Shape的虚拟析构函数。由于该析构函数是虚拟的，delete将调用最派生类的析构函数。这是至关重要的，因为派生类可能已经获取了需要释放的所有类型的资源（如文件句柄、锁和输出流）。在这种情况下，Smiley将删除其眼睛和嘴巴对象。一旦它做到了这一点，它就会调用Circle的析构函数。对象由构造函数“自底向上”（先从基）构造，由析构函数“自上而下”（先派生）销毁**。
+
+### 5.2.2 Hierarchy Navigation
+
+> **read_shape()** 函数返回一个**Shape\***，以便我们可以一视同仁地对待所有形状，但是，**如果我们想要使用由特定派生类提供的成员函数，我们可以使用dynamic_cast运算符**
+
+```C++
+Shape* ps {read_shape(std::cin)};
+
+if (Smiley* p = dynamic_cast<Smiley*> (ps)) { // does ps point to Smiley?
+	// .. a Smiley; use it
+}else {
+	// .. not a Smiley
+}
+```
+
+#Class/hierarchies/dynamic_cast[[#^quote104]]
+
+- 如果在运行时**dynamic_cast**(此处，ps)**参数所指向的对象不是预期类型(此处，Smiley)或从预期类型派生的类，dynamic_cast返回nullptr**
+
+> If at run time the object pointed to by the argument of **dynamic_cast** (here, **ps**) is not of the expected type (here, **Smiley**) or a class derived from the expected type, **dynamic_cast** returns **nullptr**. ^quote104
+
+> [!tip] 当指向不同派生类对象的指针是有效参数时，我们使用指针类型的**dynamic_cast**来判断是否是预期类型。**当不同的类型不可接受时，dynamic_cast将引发bad_cast异常**
+
+```c++
+Shape* ps {read_shape(std::cin)};
+Smiley& r {dynamic_cast<Smiley&> (ps)}; // catch std::bad_cast
+```
+
+- 当有约束的使用**dynamic_cast**时，代码会变得更加清晰。如果我们可以避免在运行时测试类型信息，我们可以编写更简单、高效的代码，但有时类型信息会丢失，必须回复。**当我们将对象传递给某个接受基类指定的接口的系统时，通常会发生这种情况。当系统稍后将对象传递给我们时，我们可能必须恢复原始类型。类似于dynamic_cast的操作称为“is kind of”和“is instance of”操作**
+
+### 5.5.3 Avoiding Resource Leaks
 
