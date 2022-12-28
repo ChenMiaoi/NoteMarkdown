@@ -2278,3 +2278,124 @@ Smiley& r {dynamic_cast<Smiley&> (ps)}; // catch std::bad_cast
 
 ### 5.5.3 Avoiding Resource Leaks
 
+#Class/hierarchies/resource_leak[[#^quote114]]
+
+- 泄漏是当我们获取资源但未能释放它时会发生什么的常规术语。**我们必须避免资源泄漏，因为泄漏会使泄漏的资源对系统不可用** -> 泄漏最终会导致系统耗尽所需资源时速度变慢甚至崩溃
+
+> A _leak_ is the conventional term for the what happens when we acquire a resource and fail to release it. Leaking resources must be avoided because a leak makes the leaked resource unavailable to the system. ^quote114
+
+- 通常情况，我们不要使用裸指针，由于历史遗留原因，C++没有GC(垃圾回收机制)，因此在后续C++11标准中，标准库提供了**unque_ptr**来防止内存泄漏的问题
+
+```c++
+class Smiley: public Circle {
+	// ...
+private:
+	std::vector<std::unque_ptr<Shape>> eyes;
+	std::unique_ptr<Shape> mouth;
+}
+```
+
+- 当我们使用**unique_ptr**后，就不需要显式的对**unique_ptr**进行**delete**，使用**unique_ptr**的代码将与正确使用原始指针的代码一样高效
+
+# 6. Essential Operations
+
+## Introduction
+
+> 某些**operation**，例如初始化、赋值、拷贝和移动，是语言规则对他们作出假设的基本操作。其他**operation**，比如**\=\=**和**<<**具有难以忽略的传统意义
+
+### 6.1.1 Essential Operations
+
+#Operations/essential[[#^quote115]]
+
+- 类型的构造函数、析构函数以及拷贝和移动**operation**在逻辑上不是分开的。我们必须将它们定义为匹配集，否则会遇见逻辑或性能问题
+
+> Constructors, destructors, and copy and move operations for a type are not logically separate. We must define them as a matched set or suffer logical or performance problems. ^quote115
+
+- 例如：如果**class X**具有执行重要任务(**例如自由存储区释放或者锁的释放**)的析构函数，则该类可能需要完整的函数补充
+
+```c++
+class X {  
+public:  
+    X(Sometype); // "ordinary constructor": create an object  
+    X(); // default constructor  
+    X(const X&); // copy constructor  
+    X(X&&); // move constructor  
+  
+    X& operator= (const X&); // copy assignment: clean up target and copy  
+    X& operator= (X&&); // move assignment: clean up target and move  
+    ~X(); // destructor: clean up  
+};
+```
+
+- 在以下五种情况下一个对象能够被**copy**或者**move**：
+	- 1. 作为赋值的源(As the source of an assignment)
+	- 2. 作为对象的初始化(As object initializer)
+	- 3. 作为函数参数(As a function argument)
+	- 4. 作为函数返回值(As a function return value)
+	- 5. 作为异常(As an exception)
+- 赋值能够使用拷贝赋值或者移动赋值重载。**原则上，其他情况就使用拷贝或移动构造函数。但是，拷贝或移动构造函数调用通常是通过在目标对象中构造，用于优化初始化对象。**
+
+```c++
+X make(Sometype);
+X x = make(value);
+```
+
+- 上述代码，编译器通常会直接从**make()** 构造X，也就是说，直接通过**X(const X&)** 构造了X对象，从而消除了还要通过赋值的开销 -> 实际上，如果没有编译器的优化，应该经过**operator=()** 和**X(const X&)** 这两步操作的
+- **除了初始化命名对象和自由存储区上的对象之外，构造函数还用于初始化临时对象和实现显示类型转换。**
+
+> [!tip] 除了类似于**X(Sometype)**这样的构造函数之外，特殊成员函数将由编译器更具需要生成，当然，也可以使用**default**关键字来指出，该函数由编译器默认实现
+
+```c++
+class Y {  
+public:  
+    Y(Sometype);  
+    Y(const Y&) = default; // I really do want the default copy constructor  
+    Y(Y&&) = default; // and the default move constructor  
+};
+```
+
+#Operations/essential/default[[#^quote116]]
+
+- 当类具有指针成员时，**最好明确指明拷贝和移动操作**。**因为指针可能指向的是需要“delete”的内容，在这种情况下，默认的成员拷贝将是错误的。或者，它也可能指向不能删除的内容。** 但是不论哪一种情况，代码的阅读者都应该知道。
+	- **因为C++存在深浅拷贝问题，如果存在指针，那么就使用默认的成员拷贝就可能出现两个对象中的指针指向同一个地址的情况。**
+
+> When a class has a pointer member, it is usually a good idea to be explicit about copy and move operations. The reason is that a pointer may point to something that the class needs to **delete**, in which case the default memberwise copy would be wrong. Alternatively, it might point to something that the class must _not_ **delete**. In either case, a reader of the code would like to know. ^quote116
+
+> [!tip] **一个好的经验法则(有时称为零法则)是定义所有基本操作或不定义任何操作(对所有操作使用默认值)**
+
+```c++
+struct Z {  
+    Vector v;  
+    std::string s;  
+};
+
+Z z1; // default initialize z1.v and z1.s
+Z z2 = z1; // default copy z1.v and z1.s
+```
+
+- 在这里，编译器会根据需要的合成成员默认构造、拷贝、移动和析构函数，并且所有这些都具有正确的语义 -> **但是请注意，当你在内部有自定义结构时，需要保证你的自定义结构能够被正确初始化**
+
+#Operations/essential/delete[[#^quote117]]
+
+- 为了补充 **=default**，我们用 **=delete**来指明不生成操作。
+	- 就比如，类成次结构中的基类我们是不希望允许成员复制的
+
+> To complement **=default**, we have **=delete** to indicate that an operation is not to be generated. A base class in a class hierarchy is the classic example where we don’t want to allow a memberwise copy. ^quote117
+
+```c++
+class Shape {
+public:
+	Shape(const Shape&) = delete; // no copying
+	Shape& operator= (const Shape&) = delete;
+	// ...
+};
+
+void copy(Shape& s1, const Shape& s2) {
+	s1 = s2; // error: Shape copy is delete
+}
+```
+
+> [!tip] **=delete** 使得尝试使用已删除的函数会在编译时报错，其不仅仅只用于基本成员函数，而是可以用于抑制任何函数
+
+### 6.1.2 Conversions
+
