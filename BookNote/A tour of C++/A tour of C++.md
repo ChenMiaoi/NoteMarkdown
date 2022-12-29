@@ -2399,3 +2399,230 @@ void copy(Shape& s1, const Shape& s2) {
 
 ### 6.1.2 Conversions
 
+#Operations/conversion[[#^quote118]]
+
+- 采用单个参数的构造函数定义了从实参类型进行的隐式转换
+	- 也就是说，一个类如果定义了一个参数的构造函数，他是能够自动发生转化的
+
+> A constructor taking a single argument defines a conversion from its argument type. ^quote118
+
+```c++
+complex z1 = 3.14; // z1 becomes {3.14, 0.0}
+complex z2 = z1 * 2; // z2 becomes z1 * {2.0, 0} == {6.28, 0}
+```
+
+- 这种隐式转换有时是很有用的，但是并不是总是有用的
+- 例如，在我们自己写的**Vector**中
+
+```c++
+Vector v = 7; // OK: v has 7 elements
+```
+
+- 但是对于标准库中的**std::vector**来说，这样的隐式转换是糟糕的，是不被允许的
+
+> [!tip] 因此，我们需要一种方式来杜绝这样的隐式类型转换：**explicit**。使用该关键字可以指明其不允许隐式类型转换，只允许显式转换
+
+```c++
+class Vector {
+public:
+	explicit Vector(int s); // no implicit conversion from int to Vector
+};
+
+Vector v1(7); // OK：v1 has 7 elements
+Vector v2 = 7; // error：no implicit conversion from int to Vector
+```
+
+- **通常而言，我们一般会将单个参数构造函数进行显式声明，而非使其能够隐式转换。除非我们有足够的理由不这样做**
+
+> [!tip] 定义类的数据成员时，是可以进行初始化操作的，被称为**默认成员初始化设定项** -> 实际上就是初始化列表
+
+```c++
+class complex {
+	double re = 0;
+	double im = 0; // representation: two doubles with default value 0.0
+public:
+	complex(double r, double i): re {r}, im {i} {}
+	complex(double r): re {r} {}
+	complex() {}
+}
+```
+
+- 默认值常被用于构造函数不被提供任何值的时候，这样简单的处理能够避免未初始化情况的发生
+
+## 6.2 Copy and Move
+
+#Operations/copy[[#^quote119]]
+
+- 默认情况下，对象可以被拷贝。不论是用户自定义类型的对象还是内置类型都是如此。**"copy"** 的默认含义是按成员拷贝：拷贝每个成员
+
+> By default, objects can be copied. This is true for objects of user-defined types as well as for builtin types. The default meaning of copy is memberwise copy: copy each member. ^quote119
+
+```c++
+void test(complex z1) {
+	complex z2 {z1}; // copy initialization
+	complex z3;
+	z3 = z2; // copy assignment
+}
+```
+
+- 当我们设计一个类的时候，我们必须始终考虑是否拷贝且如何拷贝一个对象。**对于一个简单的具体类型，成员拷贝通常是正常的语义，也就是说，编译器默认构造的拷贝构造(X(const X&))是正确的，不需要我们自行更改的。但是对于那些复杂的具体类型(例如Vector)，那么默认提供的拷贝构造就不再正确。并且*对于抽象类型，默认提供的语义几乎都不是正确的***
+
+### 6.2.1 Copying Containers
+
+#Operations/copy/container[[#^quote120]]
+
+- 当类是资源句柄时，也就是说，**当类负责通过指针访问的对象时，默认的拷贝构造通常会造成灾难(语义错误)**，按成员拷贝会违反资源句柄的不变性 -> 其实通俗来讲，就是，会导致深浅拷贝问题，被拷贝和拷贝的对象会同时指向同一块资源，从而导致问题
+
+> When a class is a _resource handle_ – that is, when the class is responsible for an object accessed through a pointer – the default memberwise copy is typically a disaster. Memberwise copy would violate the resource handle’s invariant ^quote120
+
+```c++
+void bad_copy(Vector v1) {
+	Vector v2 = v1; // copy v1's representation into v2
+	v1[0] = 2; // v2[0] is now also 2!
+	v2[1] = 3; // v2[1] is now also 3!
+}
+```
+
+- 那么，如果我们假如**v1**有四个元素：
+
+![[bad-copy.png]]
+
+- **值得一提的是，如果你出现上述的情况，那么一定会在析构的时候报错。因为，析构会delete该空间两次从而导致delete一个不属于我们的内存从而段错误**
+
+> [!tip] 我们知道，对象的拷贝被两个成员函数所定义：**拷贝构造**和**拷贝赋值重载**
+
+```c++
+class Vector {  
+public:  
+    Vector(int s); // constructor: establish invariant, acquire resources  
+    ~Vector() { delete[] elem; } // destructor: release resources  
+  
+    Vector(const Vector& a); // copy constructor  
+    Vector& operator= (const Vector& a); // copy assignment  
+  
+    double& operator[] (int i);  
+    const double& operator[] (int i) const;  
+  
+    int size() const;  
+private:  
+    double* elem; // elem points to an array of sz doubles  
+    int sz;  
+};
+```
+
+- 对于**Vector**来说，**拷贝构造函数需要为所需要数量元素定义且分配合适的空间，然后将元素拷贝在里面。以便于拷贝后的Vector都有自己的一个数据空间**
+
+```c++
+Vector::Vector(const Vector &a)  
+    : elem { new double[a.size()]}  
+    , sz {a.size()} {  
+    for (int i = 0; i != sz; i++)  
+        elem[i] = a.elem[i];  
+}
+```
+
+- 当然的，除了拷贝构造我们还需要赋值重载
+
+```c++
+Vector &Vector::operator=(const Vector &a) {  
+    double* p = new double[a.size()];  
+    for (int i = 0; i != a.size(); i++)  
+        p[i] = a.elem[i];  
+    delete[] elem; // delete old element  
+    elem = p;  
+    sz = a.size();  
+    return *this;  
+}
+```
+
+- 经过这两步之后，那么**"v2 = v1"**的结果为：
+
+![[copy-result.png]]
+
+### 6.2.2 Move Containers
+
+#Pointer/move[[#^quote121]]
+
+- 我们可以通过定义拷贝构造和赋值重载来控制拷贝。**但是对于大型容器来说，拷贝的开销是巨大的，就算我们使用引用来避免拷贝的开销，但是我们不能返回一个局部变量的引用来作为返回值** -> 因为局部变量会被销毁，一旦销毁后，引用就没了绑定的对象，这是C++语法所不允许的。用标准一点的话来说，就是**不允许将亡值作为引用返回**
+
+> We can control copying by defining a copy constructor and a copy assignment, but copying can be costly for large containers. We avoid the cost of copying when we pass objects to a function by using references, but we can’t return a reference to a local object as the result (the local object would be destroyed by the time the caller got a chance to look at it). ^quote121
+
+```c++
+Vector Vector::operator+(const Vector &a) {  
+    if (this->size() != a.size())  
+        throw Vector_size_mismatch {};  
+    Vector res(a.size());  
+    for (int i = 0; i != a.size(); i++)  
+        // res[i] = this->operator[](i) + a[i];  
+         res[i] = (*this)[i] + a[i];  
+    return res;  
+}
+```
+
+- 在此处，就是将局部的res作为返回值返回
+
+```c++
+void f(const Vector& x, const Vector& y, const Vector& z) {
+	Vector r;
+	// ...
+	r = x + y + z;
+	// ...
+}
+```
+
+- 在这里，$r = x + y + z$会导致拷贝一个**Vector**至少两次(每使用一次**operator+**一次)。如果这个**Vector**够大，那么会导致程序的开销很大，最为不能接受的是，我们每使用(**operator+**)一次，就会导致**res**被创建，然后被销毁一次且在销毁后，编译器还要拷贝一次然后再通过**operator=**赋值给r。而我们只是想要从函数中获取结果，而非一个拷贝
+
+```c++
+class Vector {
+	// ...
+	Vector(const Vector& a); // copy constructor
+	Vector& operator= (const Vector& a); // copy assignment
+
+	Vector(Vector&& a); // move constructor
+	Vector& operator= (Vector&& a); // move assignment
+}
+```
+
+- 通过给定移动定义，编译器将选择**move constructor**来实现返回值从函数中转移出来。**这意味着$r = x + y + z$将不涉及类的拷贝，相反，只是"move"**
+
+```c++
+Vector::Vector(Vector&& a)
+	: elem {a.elem} // "grab the elements" from a
+	, sz {a.size()} {
+	a.elem = nullptr; // now a has no element
+	a.sz = 0;
+}
+```
+
+- **&&** 的意义是 **“右值引用(rvalue reference)”**，也就是说我们可以绑定右值的引用，“右值”一次是“左值”的补充
+	- “左值”：变量，对象; **一般是可寻址的对象，具有持久性**
+	- “右值“：常量，将亡值; **一般是不可寻址的常量，临时对象，是暂时存在的**
+
+> [!tip] 移动构造函数不接受**const**参数，因为移动构造需要将参数**清除干净**，当然的，移动赋值也是如此
+
+- 通常情况下，**进行移动的对象经过移动后处于允许运行析构函数的状态** -> 当然的，当你进行移动后，被移动的对象的数据转交给了其他人，因此它的存在是非必须的。
+
+> [!tip] 我们可以通过标准库所提供的函数来进行移动**std::move()**
+
+```c++
+Vector f() {
+	Vector x(1000);
+	Vector y(1000);
+	Vector z(1000);
+	z = x; // we get a copy (x might be used later)
+	y = std::move(x); // we get a move (move assignment)
+	// ... better not use x here
+	return z; // we get a move
+}
+```
+
+- 标准库函数**std::move**实际上并没有移动任何东西。相反，它返回一个对我们可以从中移动的参数的引用 -> 右值引用
+
+> [!bug] 注意：如果想要返回一个将亡值来调用移动构造，**完全不需要显式调用move，因为编译器会默认的优化该返回值**
+
+![[return-move.png]]
+
+- **编译器有义务(根据C++标准)消除与初始化相关的大多数副本。因此调用移动构造函数的频率实际上没有你认为的那么频繁，这种拷贝优化消除了移动的非常小的开销，另一方面，通常不可能隐式消除赋值中的拷贝和移动操作，因此移动赋值对性能是至关重要的**
+
+## 6.3 Resource Management
+
