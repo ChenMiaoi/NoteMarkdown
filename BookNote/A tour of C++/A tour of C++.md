@@ -2626,3 +2626,284 @@ Vector f() {
 
 ## 6.3 Resource Management
 
+#Operations/resource[[#^quote122]]
+
+- 通过定义构造函数、拷贝复制、移动复制和析构函数，程序员可以完全控制所包含资源(例如容器的元素)的生命期。此外，移动构造函数允许对象可以从一个范围简单而 **“廉价”** 地移动到另外一个范围。这样，我们就能使得不能或不想复制出范围的对象可以简单而廉价地移出
+
+> By defining constructors, copy operations, move operations, and a destructor, a programmer can provide complete control of the lifetime of a contained resource (such as the elements of a container). Furthermore, a move constructor allows an object to move simply and cheaply from one scope to another. That way, objects that we cannot or would not want to copy out of a scope can be simply and cheaply moved out instead. ^quote122
+
+- 如果我们用标准库中的**thread**表示并发活动，或者一个百万级别的**Vector**，我们是不会想要拷贝任意一个的
+
+```c++
+std::vector<std::thread> my_thread;
+
+Vector init(int n) {
+	thread t {heartbeat}; // run heartbeat concurrently
+	my_thread.push_back(std::move(t)); // move into my_threads
+	// ... more initialization ...
+	Vector vec(n);
+	for (auto& x : vec)
+		x = 777; 
+	return vec; // move vec out of init()
+}
+```
+
+- 在许多情况下，资源句柄(如**Vector**和**thread**)是直接使用指针的更好的代替方案。**事实上，标准库提供了智能指针(如unique_ptr)，其本身就是资源句柄**
+- 在许多与严重，资源管理主要是委托给垃圾回收器(**Garbage Collector(GC)**)。而在C++中，你也可以选择插入垃圾回收器，但是，垃圾回收器在C++作为资源管理的最后选择方案，除非迫不得已，不然就不会选择。
+
+> 此外，内存不是唯一的资源。**资源是必须在使用后获取和释放(显式或隐式)的任何内容**。例如内存、锁、套接字、文件句柄和线程句柄。因此，不只是内存的资源被称为非内存资源。**一个好的资源管理系统处理各种资源，在任何长时间运行的系统中都必须避免泄漏，但过度的资源保留几乎与泄漏一样糟糕**。
+
+#Operations/resource/RAII[[#^quote123]]
+
+- 在诉诸垃圾回收之前，需要系统地使用资源句柄：**让每个资源在某个范围内有一个所有者，默认情况下在其所有者的范围结束时释放**。这在C++中，被称为**RAII(Resource Acquisition Is Initialization)**，并以异常的形式与错误处理集成在一起。
+- 当然的，可以使用移动语义或只能指针将资源从一个范围移动到另一个范围，共享所有权可以由**share_ptr**表示
+
+> Before resorting to garbage collection, systematically use resource handles: let each resource have an owner in some scope and by default be released at the end of its owner’s scope. In C++, this is known as _RAII_ (_Resource Acquisition Is Initialization_) and is integrated with error handling in the form of exceptions. Resources can be moved from scope to scope using move semantics or “smart pointers,” and shared ownership can be represented by “shared pointers” ^quote123
+
+- 在C++标准库中，**RAII**无处不在，例如：内存(string、vector、map、unordered_map等)，文件(ifstream、ofstream等)、线程(thread)、锁(lock_guard、unique_lock等)和通用对象(通过unique_ptr和share_ptr)。
+
+## 6.4 Operator Overloading
+
+#Operations/overloading[[#^quote124]]
+
+- 我们可以为用户自定义类型赋予C++运算符的含义。**这被称为运算符重载**，因为在使用时，必须从一组具有相同名称的运算符中选择运算符的正确实现
+
+> We can give meaning to C++’s operators for user-defined types. That’s called _operator overloading_ because when used, the correct implementation of an operator must be selected from a set of operators with that same name. ^quote124
+
+- **C++不允许定义新的(也就是说，我们独创的)运算符**，例如：不能定义**operator^^，\=\=\=，\*\*，$或者一元%**。一旦允许这样，就会发生很多很乱，同时，**强烈建议使用常规语义定义运算符**。例如：**operator+的意义表示减法，显然这对谁都没有好处**
+
+- 我们可以为自定义类型定义的运算符有：
+	- 二进制算数运算符：**+、-、\*、/、%**
+	- 二进制逻辑运算符：**&(按位与)、| (按位或)、^ (按位异或)**
+	- 二进制关系运算符：**\=\=、!=、<、<=、>、>=、<\=\>**
+	- 逻辑运算符：**&&、||**
+	- 一元算数和逻辑运算符：**+、-、～(按位取反)、! (逻辑非)**
+	- 赋值：**=、+=、\*=等等**
+	- 自增自减：**++、--**
+	- 指针操作：**->、一元\*(解引用)、一元&(取地址)**
+	- 调用：**()**
+	- 索引：**\[\]**
+	- 逗号：**,**
+	- 位移：**>>、<<**
+- **我们不允许重载 "."运算符**
+
+```c++
+class Matrix {  
+public:  
+    Matrix& operator= (const Matrix& matrix); // assign m to *this; return a reference  
+};
+```
+
+- 这通常是第一个作出修改的运算符重载，并且出于历史原因，一般我们会重载 **=、->、()和\[\]**
+
+```c++
+Matrix operator+ (const Matrix& matrix1, const Matrix& matrix2);
+```
+
+> [!tip] 如果在类中定义，**由于this指针的存在，类似operator+的重载只允许显式至多一个参数，但是在类外，可以实现两个**
+
+- 我们通常将具有对称操作的运算符(比如a + b)定义为独立函数，这样两个操作数就可以被同等对待(**而不是a.operator+ (b)**)。而为了从返回一个潜在的大对象(比如Matrix)中还拥有良好的性能，我们依赖于移动语义
+
+## 6.5 Conventianal Operations
+
+#Operations/conversion/operation[[#^quote125]]
+
+- 某些操作在为类型定义时具有常规含义。这些常规含义通常是由程序员和库(**特别是标准库**)承担，因此在设计操作有意义的新类型时，遵循它们是明智的
+
+> Some operations have conventional meanings when defined for a type. These conventional meanings are often assumed by programmers and libraries (notably, the standard library), so it is wise to conform to them when designing new types for which the operations make sense. ^quote125
+
+- 以下是具有常规含义的操作：
+	- 比较符：**\=\=、!=、<、<=、>、>=、<\=\>
+	- 容器操作：**size()、begin()、end()**
+	- 迭代器或智能指针：**->、\*、\[\]、++、--、+、-、+=、-=**
+	- 函数对象：**()**
+	- 输出输入操作：**>>、<<**
+	- **swap()**
+	- 哈希函数：**hash<>**
+
+### 6.5.1 Comparisons(Relational Operators)
+
+- 相等比较(\=\=和!=)的含义与拷贝密切相关，拷贝后应该相等
+
+```c++
+X a = something;
+X b = a;
+assert(a == b); // if a != b here, something is very odd
+```
+
+- 定义**\=\=**时，还要定义 **!=**并确保**a != b**表示 **!(a == b)**
+- 当然的，大于小于也是如此：
+	-  $a <= b$ 意味着 $(a < b) || (a == b)$ 以及 $!(b < a)$
+	- $a > b$ 意味着 $b < a$
+	- $a >= b$ 意味着 $(a > b) || (a == b)$ 以及 $!(a < b)$ 
+
+> [!tip] 对于二元运算符的两个操作数(例如：**\=\=**)提供相同的处理，最好将其定义为其类命名空间中的独立函数
+
+```c++
+namespace NX {
+	class X {
+		// ...	
+	};
+	bool operator== (const X&, const X&);
+};
+```
+
+> [!warning] **<\=\>**(三路运算符(宇宙飞船运算符))本身就是一种规律(C++ 20), 其规则与其他运算符不同。**特别是，通过定义默认的<\=\>隐式定义了其他关系运算符**
+
+```c++
+class R {  
+    auto operator<=> (const R& a) const = default;  
+};  
+  
+void user(const R& r1, const R& r2) {  
+    bool b1 = (r1 <=> r2) == 0; // r1 == r2;  
+    bool b2 = (r1 <=> r2) < 0; // r1 < r2;  
+    bool b3 = (r1 <=> r2) > 0; // r1 > r2;  
+  
+    bool b4 = (r1 == r2);  
+    bool b5 = (r1 < r2);  
+}
+```
+
+- 与C语言的**strcpm**一样，**<\=\>** 实现了三向比较。**负返回值表示小于，0表示等于，正值表示大于**
+
+> [!bug] operator<\=\>的重载需要引入头文件**compare**，同时，如果**<\=\>**定义非默认值，则**\=\=**不是隐式定义的，但**<**和其他关系运算符是隐式定义的
+
+```c++
+struct R2 {
+	int m;
+	auto operator<=> (const R2& a) const {
+		return a.m == m ? 0 : a.m < m ? -1 : 1;
+	}
+}
+
+void user(const R2& r1, const R2& r2) {
+	bool b4 = (r1 == r2); // error: no non-default == 
+	bool b5 = (r1 < r2); // OK
+}
+```
+
+> 大多数标准库类型(如string、vector)都是遵循该模式的。**因为，如果一个类型有多个元素参与比较，则默认的<\=\>一次检查一个元素，从而生成字典顺序。在这种情况下，通常得另外提供一个单独优化的\=\=，因为<\=\>必须检查所有元素以确定所有三个备选方案**
+
+```c++
+string s1 = "asdfghjkl";
+string s2 = "asdfghjk";
+
+bool b1 = s1 == s2; // false
+bool b2 = (s1 <=> s2) == 0; // false
+```
+
+- 在这个案例中，如果使用普通的**\=\=**，只需要查看字符串的字符数就可以发现其是不相等的，而使用**<\=\>**，我们就必须读取s2的所有字符才能发现其小于s1。**默认需要自己定义\=\=，是为了C++中程序性能的考量**
+
+### 6.5.2 Container Operations
+
+#Operations/conversion/container[[#^quote126]]
+
+- 除非有很好的理由不这么做，否则请以标准库容器的风格设计容器。**特别是，通过将容器资源实现为具体适当基本操作的句柄来确保容器资源的安全**
+
+> Unless there is a really good reason not to, design containers in the style of the standard-library containers. In particular, make the container resource safe by implementing it as a handle with appropriate essential operations ^quote126
+
+> [!tip] 对于标准库来说，会有一个接口用于自身的大小：**size()**
+
+```c++
+for (size_t i = 0; i < c.size(); i++) {
+	// size_t is the name of the type return by a size()
+	c[i] = 0;
+}
+```
+
+- 然而，对于标准库的算法来说，不是使用**从0到size()的索引便利容器，而是依赖于由迭代器对分隔的序列**
+
+```c++
+for (auto p = c.begin(); p != c.end(); p++)
+	*p = 0;
+```
+
+- 在此处，**begin()指向c的第一个元素，end()指向最后一个元素的后一个元素**。迭代器支持 **++**
+- 当然的，迭代器也被**range-for**实现使用，因此我们可以简化循环
+
+```c++
+for (auto& x : c)
+	x = 0;
+```
+
+- 迭代器用于将序列传递给标准库算法
+
+```c++
+std::sort(c.begin(), c.end());
+```
+
+> [!tip] 对于迭代器，还有**const**版本，cbegin和cend，其实际类型为**const_iterator**
+
+### 6.5.3 Iteraors and "smart pointers"
+
+#Operations/conversion/ierators[[#^quote127]]
+
+- 用户定义的迭代器和智能指针实现其目的所需的运算符和指针放， 并经常根据需要添加语义
+
+> User-defined iterators  and “smart pointers”  implement the operators and aspects of a pointer desired for their purpose and often add semantics as needed. ^quote127
+
+- 访问符：**\*、->(for a class)、\[\](for a container)**
+- 迭代器/导航：**++(forward)、--(backward)、+=、-=、+、-**
+- 拷贝/移动：**=**
+
+### 6.5.4 Input and Output Operations
+
+- 详情请见第十一章
+
+### 6.5.5 swap()
+
+- 许多算法，尤其是sort（），使用swap（）函数来交换两个对象的值。这种算法通常假设swap（）非常快，不会抛出异常。标准库提供了一个std:：swap（a，b），实现为三个移动操作）。如果你设计了一个复制成本很高并且很可能被交换的类型（例如，通过排序函数），那么就给它一个移动操作或swap（）或两者。注意，标准库容器和字符串具有快速移动操作。
+
+### 6.5.6 hash<>
+
+- 标准库unordered_map<K,V>是一个哈希表，K是键类型，V是值类型)。要使用类型X作为键，必须定义hash\<X\>。对于常见类型，例如std::string，标准库为我们定义了hash\<\>。
+
+## 6.6 User-Defined Literals
+
+#Operations/Literals[[#^quote128]]
+
+- 类的一个目的是使程序员能够设计和实现与内置类型紧密相似的类型。构造函数提供的初始化等于或超过内置类型初始化的灵活性和效率，但对于内置类型，我们有文本
+	- 123 is an int
+	- 0xFF00u is an unsigned int
+	- 123.456 is a double
+	- "Surprise!" is a const char\[10\]
+
+> One purpose of classes was to enable the programmer to design and implement types to closely mimic built-in types. Constructors provide initialization that equals or exceeds the flexibility and efficiency of built-in type initialization, but for built-in types, we have literals ^quote128
+
+- 为用户类型提供此类文本是很有用的。这是通过定义文字的合适后缀来完成的，因此：
+	- "Surprise!"s is a std::string
+	- 123s is seconds
+	- 12.7i is imaginary so that 12.7i + 47 is a complex number
+
+> [!tip] 我们可以通过使用合适的标头和命名空间从标准库中获取
+
+| header file | literals | means |
+| :---: | :---: | :---: |
+| \<chrono\> | std::literals::chrono_literals | h, min, s, ms, us, ns |
+| \<string\> | std::literals::string_literals | s |
+| \<string_view\> | std::literals::string_literals | sv |
+| \<complex\> | std::literals::complex_literals | i, il, if |
+
+- 带有用户定义后缀的文字称为用户定义的文字或UDLs。此类文字是使用文字运算符定义的。文字运算符将其参数类型的文字（后跟下标）转换为其返回类型。
+
+```c++
+constexpr std::complex<long double> operator""_i (long double arg) {  
+    return {0, arg};  
+}
+
+// the 12_i becomes 0, 12i
+```
+
+- **operator""** 说明了我们正在定义一个**literal operator**
+- 而**operator""\_i** 后面的**i**是运算符赋予意义的后缀
+- 浮点文本的类型一般是**long double**的
+
+```c++
+std::complex<double> z = 2.7182818+6.283185i;
+```
+
+> [!tip] 由于**operator""** 和**operator+** 都是**constexpr**的，因此都在编译期计算
+
+# 7. Templates
+
