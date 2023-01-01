@@ -2299,7 +2299,7 @@ private:
 
 # 6. Essential Operations
 
-## Introduction
+## 6.1 Introduction
 
 > 某些**operation**，例如初始化、赋值、拷贝和移动，是语言规则对他们作出假设的基本操作。其他**operation**，比如**\=\=**和**<<**具有难以忽略的传统意义
 
@@ -2906,4 +2906,195 @@ std::complex<double> z = 2.7182818+6.283185i;
 > [!tip] 由于**operator""** 和**operator+** 都是**constexpr**的，因此都在编译期计算
 
 # 7. Templates
+
+## 7.1 Introduction
+
+#Template/introduction[[#^quote129]]
+
+- 模板是我们用一组类型或值参数化的类或函数。我们使用模板来表示最好理解为一般想法的想法，我们可以通过指定参数从中生成特定的类型和函数
+
+> A _template_ is a class or a function that we parameterize with a set of types or values. We use templates to represent ideas that are best understood as something general from which we can generate specific types and functions by specifying arguments ^quote129
+
+## 7.2 Parameterized Types
+
+> 我们可以将我们的**double Vector**通过**template**推广为任意的**Vector**类型，其方法就是通过模板将特定类型替换为类型参数
+
+```c++
+template <typename T>  
+class Vector {  
+public:  
+    explicit Vector(int s); // constructor: establish invariant, acquire resources  
+    ~Vector() { delete[] elem; } // destructor: release resources  
+public:  
+    // copy and move operations  
+    Vector(const Vector<T>& v);  
+    Vector(Vector<T>&& v);  
+    Vector<T>& operator= (const Vector<T>& v);  
+    Vector<T>& operator= (Vector<T>&& v);  
+  
+    T& operator[] (int i); // for non-const Vectors  
+    const T& operator[] (int i) const; // for const Vectors  
+    int size() const { return sz; }  
+private:  
+    T* elem; // elem points to an array of sz elements of type T  
+    int sz;  
+};
+```
+
+- **template \<typename T\>** 前缀使**T**成为其前缀声明的类型形参。它就相当于是C++中的**for all T**更准确来说是**for all types T**。
+- 如果你想要数学意义上的**for all T**，比如说$P(T)$，那么你可以使用**concepts(§7.2.1、§8.2)**。
+
+> [!tip] 由于C++的历史原因，在老版本中，C++是采用**class**来代表**typename**的
+
+- 而上述代码的定义可以如下所示
+
+```c++
+template <typename T>  
+Vector<T>::Vector(int s) {  
+    if (s < 0)  
+        throw std::length_error {"Vector constructor: negative size"};  
+    elem = new T[s];  
+    sz = s;  
+}  
+  
+template <typename T>  
+const T &Vector<T>::operator[](int i) const {  
+    if (i < 0 || size() <= i)  
+        throw std::out_of_range {"Vector::operator[]"};  
+    return elem[i];  
+}
+
+// 当我们给出这样的定义后，那么就能够有如下的实例
+
+void func1() {  
+    Vector<char> vc(200); // vector of 200 characters  
+    Vector<std::string> vs(17); // vector of 17 strings  
+    Vector<std::list<int>> vli(45); // vector of 45 lists of integers  
+}
+```
+
+> [!bug] 在上述中，**Vector<std::list\<int\>>**中的**>>**不是输入或者右移操作符。在以前的老标准中，模板的**<>**应该分开：** Vector< std::list\<int\> >**否则会报错
+
+> [!warning] 注意：如果你想要的你的容器能够用于**range-for**，那么必须有**begin()**和**end()**，而且大小写必须一致，否则仍然错误
+
+```c++
+template <typename T>  
+T *Vector<T>::begin() {  
+    return &elem[0];  
+}  
+  
+template <typename T>  
+T *Vector<T>::end() {  
+    return &elem[size()];  
+}
+
+for (auto& v : vs)  
+    std::cout << v << " ";
+```
+
+- **模板是一种编译时机制，因此其与手工编写代码相比，使用模板不会引起运行时的开销。也就是说，其实你的Vector\<double\>实际上是相当与自己写了一个“double Vector”，只不过这样的操作交给了编译器**
+
+### 7.2.1 Constrained Template Arguments(C++20)
+
+#Template/Constrained/Element[[#^quote130]]
+
+- 通常，模板只对满足特定条件的模板参数有意义。例如：**Vector**通常提供拷贝操作，如果提供了，那么就说明其元素必须是可拷贝的。也就是说，我们必须要求**Vector**的模板参数**不仅仅只是一个类型名，还必须是一个“Element”，其中“Element”指定了可以元素类型的要求**
+
+> Most often, a template will make sense only for template arguments that meet certain criteria. For example, a **Vector** typically offers a copy operation, and if it does, it must require that its elements are copyable. That is, we must require that **Vector**’s template argument is not just a **typename** but an **Element** where “**Element**” specifies the requirements of a type that can be an element ^quote130
+
+```c++
+template <Element T>
+class Vector {
+private:
+	T* elem;
+	int sz;
+}
+```
+
+- **template \<Element T\>** 前缀是C++版本的**for all T such that Element(T)**，也就是说，**Element**是一个谓词(表明含义)，**它检查T是否具有Vector所需的所有属性。这样的概念被称为"concept(§8.2)"**。
+- **而指定了“concept”的模板实参称为约束实参，参数受到约束的模板称为约束模板**
+
+> [!tip] 尝试使用类型不符合其要求的模板是一个编译时错误
+
+```c++
+Vector<int> v; // OK
+Vector<std::thread> v1; // erorr
+```
+
+> 因此，**"concept"可以让编译器在使用时进行类型检查，比不受约束的模板参数更早地给出更好的错误消息**。c++在c++ 20之前没有正式支持概念，所以旧的代码使用不受约束的模板参数，并将需求留给文档。但是，**从模板生成的代码会进行类型检查，因此即使是不受约束的模板代码也与手写代码一样是类型安全的。对于不受约束的参数，在所有相关实体的类型可用之前不能进行类型检查，因此它可能会在编译过程的晚期发生，在实例化时，并且错误消息通常很糟糕**。
+
+### 7.2.2 Value Template Arguments
+
+- 除了类型参数之外，模板还可以使用值的参数
+
+```c++
+template <typename T, int N>  
+struct Buffer {  
+    constexpr int size() { return N; }  
+    T elem[N];  
+};
+```
+
+- 值参在许多上下文中都很有用。例如：**Buffer**允许我们在不使用空闲存储区(动态内存)的情况下创建任意大小的**Buffer**
+
+```c++
+Buffer<char, 1024> glob; // global buffer of char(statically allocated)
+
+void fct() {
+	Buffer<int, 10> buf; // local buffer of int(on the stack)
+}
+```
+
+> [!tip] 遗憾的是，由于一些技术原因，**字符串文本不能作为模板值参数**。但是在某些情况下，使用字符串进行参数化的能力至关重要，因此可以借助数组来完成
+
+```c++
+template <char* s>  
+void outs() { std::cout << s; }  
+  
+char arr[] = "Weird workaround";  
+  
+void use() {  
+    outs<"straightforward use">(); // error (for now)  
+    outs<arr>(); // OK  
+}
+```
+
+### 7.2.3 Template Argument Deduction
+
+> 定义模板为实例化时，我们通常需要指定其类型
+
+```c++
+std::pair<int, double> p = {1, 5.2};
+```
+
+> [!tip] 必须指定模板参数是很单调的，因此，C++中可以由构造函数从初始化中推导出其类型
+
+```c++
+std::pair p = {1, 5.2};
+
+template <typename T>
+class Vector {
+public:
+	Vector (int);
+	Vector (initialize_list<T>);
+};
+
+Vector v1 {1, 2, 3}; // deduce v1's element type from the initializer element type: int
+Vector v2 = v1; // deduce v2's element type from v1's element type: int
+
+auto p = new Vector {1, 2, 3}; // p is a Vector<int>*
+
+Vector <int> v3(1); // here we need to be explicit about the element type (no element type is mentioned)
+```
+
+- 显然，这简化了表示，并可以消除错误键入冗余模板参数类型所引起的麻烦。然而，这并不是灵丹妙药。和所有其他强大的机制一样，演绎也会带来意外。
+
+```c++
+using namespace std::literals::string_literals;
+Vector<string> vs {"Hello", "World"}; // OK: Vector<string>
+Vector vs1 {"Hello", "World"}; // OK: deduces to Vector<const char*> (Surprise?)
+Vector vs2 {"Hello"s, "World"s}; // OK: deduces to Vector<string>
+Vector vs3 {"Hello"s, "World"}; // error: the initializer list is not homogenous
+Vector<string> vs4 {"Hello"s, "World"}; // OK: the element type is explicit
+```
 
