@@ -3098,3 +3098,110 @@ Vector vs3 {"Hello"s, "World"}; // error: the initializer list is not homogenous
 Vector<string> vs4 {"Hello"s, "World"}; // OK: the element type is explicit
 ```
 
+> 如果初始化设定项序列中的元素有不同的类型，则我们无法推断出唯一的元素类型，因此会发生歧义错误。而标准库中有一个构造函数，采用一对分隔序列的迭代器，还有一个可以采用一对值的构造函数
+
+```c++
+template <typename T>
+class Vector {
+public:
+	Vector (initialize_list<T>); // initialize_list constructor
+	template <typename Iter>
+	Vector (Iterb, Iter e); [b, e) iterator-pair constructor
+	struct iterator {
+		using value_type = T;
+		// ...
+	}; 
+	ierator begin();
+};
+
+Vector v1 {1, 2, 3, 4, 5}; //element type is int
+Vector v2 (v1.begin(), v1.begin() + 2); // a pair of iterators
+Vector v3(9, 17); // error: ambiguous
+```
+
+- 事实上，我们可以使用**concept**来解决这个问题，但是由于该概念是C++20中才出现的标准，因此在以前的代码中，我们需要**一种相同类型的值应该被视为迭代器**
+
+```c++
+template <typename Iter>
+Vector (Iter, Iter) -> Vector <typename Iter::value_type>;
+
+Vector v1 {1, 2, 3, 4, 5}; //element type is int
+Vector v2 (v1.begin(), v1.begin() + 2); // element type is int
+Vector v3 {v1.begin(), v2.begin() + 2}; // element type is Vector::iertaor
+```
+
+- **{}-initialize**语法总是指向初始化列表构造函数(如果存在的话)，因此**v3**是一个vector的迭代器：**Vector<Vector\<int\>>::iterator**
+- **()-initialize**语法是在我们不需要初始化列表时约定俗成的
+- **类模板参数推导的英文缩写为CTAD**
+
+## 7.3 Parameterized Operations
+
+#Template/Parameterized[[#^quote131]]
+
+- 模板的用途远不止简单地参数化具有元素类型的容器。特别是，它们广泛用于标准库中类型和算法的参数化
+
+> Templates have many more uses than simply parameterizing a container with an element type. In particular, they are extensively used for parameterization of both types and algorithms in the standard library ^quote131
+
+- 有三种方法可以表示按类型或值参数化的操作：
+	- 函数模板
+	- 函数对象：可以携带数据并像函数一样被调用的对象
+	- lambda表达式：函数对象的速记表示法
+
+### 7.3.1 Function Templates
+
+```c++
+template <typename Sequence, typename Value>  
+Value sum (const Sequence& s, Value v) {  
+    for (auto x : s)  
+        v += x;  
+    return v;  
+}
+```
+
+- 值模板参数和函数参数 v 用于允许调用方指定累加器的类型和初始值（累加总和的变量）
+
+```c++
+void user(Vector<int>& vi, std::list<double>& ld,  
+          std::vector<std::complex<double>>& vc) {  
+    int x = sum(vi, 0); // the sum of a vector of ints (add ints)  
+    double d = sum(vi, 0.0); // the sum of a vector of ints (add doubles)  
+    double dd = sum(ld, 0.0); // the sum of a list of doubles  
+    auto z = sum(vc, std::complex {0.0, 0.0});  
+    // the sum of a vector of complex<double> }
+```
+
+> [!bug] 函数模板可以是成员函数，但不能是虚拟成员。编译器不会知道程序中此类模板的所有实例化，因此它无法生成 vtbl
+
+### 7.3.2 Fcuntion Objects
+
+#Template/Parameterized/object[[#^quote132]]
+
+- 一种特别有用的模板是函数对象(也被称为**funtor**)，它用于定义可以像函数一样调用的对象
+
+> One particularly useful kind of template is the _function object_ (sometimes called a _functor_), which is used to define objects that can be called like functions. ^quote132
+
+```c++
+template <typename T>  
+class Less_than {  
+    const T val; // value to compare against  
+public:  
+    Less_than(const T& v): val(v) {}  
+    bool operator() (const T& x) const { return x < val; } // call operator  
+};
+```
+
+- 名为**operator()** 的函数实现了调用运算符 **()**，也被称为**函数调用**或者简称**调用**
+
+```c++
+void func3() {  
+    Less_than lti {42}; // lti(i) will compare i to 42 using < (i<42)  
+    using namespace std::literals::string_literals;  
+    Less_than lts {"Backus"s}; // lts(s) will compare s to "Backus" using < (s<"Backus")  
+    Less_than<std::string> lts2 {"Naur"}; // "Naur" is a C-style string, so we need <string> to get the right <  
+}
+
+void fct(int n, const std::string& s) {  
+    bool b1 = lti(n); // true if n < 42  
+    bool b2 = lts(s); // true is s < "Backus"  
+}
+```
