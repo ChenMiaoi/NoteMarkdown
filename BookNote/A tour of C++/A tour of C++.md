@@ -3205,3 +3205,174 @@ void fct(int n, const std::string& s) {
     bool b2 = lts(s); // true is s < "Backus"  
 }
 ```
+
+- 函数对象被广泛用于算法的参数中
+
+```c++
+template <typename C, typename P>
+int count(const C& c, P pred) {
+	// assume that C is a container and P is a predicate on its elements
+	int cnt = 0;
+	for (const auto& x : c)
+		if (pred(x))
+			++cnt;
+	return cnt;
+}
+```
+
+- 给定**concept**，我们可以形式化**count()**关于其参数的假设，并在编译时检查它们。其是我们可以调用它来返回真假的东西
+
+```c++
+void f(const Vector<int>& vec, const std::list<std::string>& lst, int x, const std::string& s) {  
+    std::cout << "number of values less than " << x << " : " << std::count(vec.begin(), Less_than {x}) << "\n";  
+    std::cout << "number of values less than " << s << " : " << std::count(lst, Less_than {x});  
+}
+```
+
+- 此处，**Less_than {x}** 构造了一个类型为**Less_than\<int\>**的对象，调用运算符将其与名为x的int值做比较，同理**Less_than {s}** 也是如此
+> 函数对象的美妙之处在于它们携带要与之进行比较的值。我们不必为每个值（和每种类型）编写单独的函数，也不必引入讨厌的全局变量来保存值。此外，对于像 Less_than 这样的简单函数对象，内联很简单，因此调用 Less_than 比间接函数调用效率高得多。携带数据的能力加上它们的效率使函数对象作为算法的参数特别有用。
+
+### Lambda Expressions
+
+- 在上一节中，我们定义了**Less_than**，但这其实很不方便，而C++提供了一种用于隐式生成函数对象的方法：
+
+```c++
+void f(const Vector<int>& vec, const std::list<std::string>& lst, int x, const std::string& s) {  
+    std::cout << "number of values less than "  
+                << x << " : "  
+                << std::count(vec.begin(), [&](int a) { return a < x; })  
+                << "\n";  
+    std::cout << "number of values less than "  
+                << s << " : "  
+              << std::count(lst, [&](const std::string& a) { return a < s; });  
+}
+```
+
+> **[&]（int a）{ return a<x; }** 称为 lambda 表达式。它生成一个类似于 **Less_than\<int\>{x}** 的函数对象。
+> [&] 是一个捕获列表，指定将通过引用访问 lambda 正文中使用的所有局部变量（例如 x）。如果我们只想“捕获”x，我们可以这样说：[&x]。如果我们想给生成的对象一个 x 的副本，我们可以这样说：[x]。 捕获任何内容是 [ ]，捕获引用使用的所有局部变量是 [&]，捕获值使用的所有局部变量是 [=]
+
+> [!tip] 对于成员函数中定义的lambda表达式，**\[this\]** 捕获当前对象的引用，如果我们想要当前对象的拷贝，则是 **\[\*this\]** (C++11)
+
+```c++
+class X {  
+public:  
+    void f(X& x) {  
+        auto f = [this]() { return *this; };  
+        auto f1 = [*this](){ return *this; };  
+    }  
+};
+```
+
+#### 7.3.3.1 Lambdas as funtion arguments
+
+#Template/Lambda[[#^quote133]]
+
+- 使用**lambda表达式**会使代码更方便简洁，但是会使其晦涩难懂。对于一些不是很普通的操作(比如说简单的表达式)，更推荐给这个操作命名(也就是说，写成一个完整的函数)，使其更具有意义
+
+> Using lambdas can be convenient and terse, but also obscure. For nontrivial actions (say, more than a simple expression), I prefer to name the operation so as to more clearly state its purpose and to make it available for use in several places in a program. ^quote133
+
+```c++
+template <typename C, typename Oper>
+void for_each(C& c, Oper op) {
+	for (auto& x : c)
+		op(x);
+}
+
+void user() {
+	vector <unique_ptr<Shape>> v;
+	while (std::cin)
+		v.push_back(read_shape(std::cin));
+	for_each(v, [](unique_ptr<Shape>& ps) { ps->draw(); });
+	for_each(v, [](unique_ptr<Shape>& ps) { ps->ratate(45); });
+}
+```
+
+#### 7.3.3.2 Lambdas for initialization
+
+> 使用lambda表达式，我们可以将任何语句转化为表达式。这主要用于提供将值计算为参数值的操作，但功能是通用的。
+
+```c++
+void user(Init_mode m, int n, std::vector<int>& arg, Iterator p, Iterator q) {  
+    std::vector<int> v;  
+  
+    switch (m) {  
+        case Init_mode::zero:  
+            v = std::vector<int> (n);  
+            break;  
+        case Init_mode::cpy:  
+            v = arg;  
+            break;  
+    }  
+  
+    if (m == Init_mode::seq)  
+        v.assign(p, q);  
+}
+```
+
+- 这是一个风格化的例子，但不幸的是不是非典型的。我们需要在一组用于初始化数据结构的替代方案中进行选择（此处为 v），并且我们需要为不同的替代方案进行不同的计算。这样的代码通常是混乱的，被认为是“效率”所必需的，并且是错误的来源。
+	- 变量可以在获得其预期值之前使用
+	- “初始化代码”可能与其他代码混合，使其难以理解。
+	- 当“初始化代码”与其他代码混合时，更容易忘记案例。
+	- 这不是初始化，而是赋值
+- 因此，我们使用lambda表达式来作为初始化
+
+```c++
+void user(Init_mode m, int n, std::vector<int>& arg, Iterator p, Iterator q) {  
+    std::vector<int> v = [&] {  
+        switch (m) {  
+            case Init_mode::zero:  
+                return std::vector<int> (n);  
+            case Init_mode::seq:  
+                return std::vector<int> {p, q};  
+            case Init_mode::cpy:  
+                return arg;  
+            case Init_mode::patrn:  
+                break;  
+        }  
+    }();  
+}
+```
+
+#### 7.3.3.3 Finally
+
+> 析构函数提供了一种通用的隐式机制，用于在使用对象后进行清理 （RAII)，但是如果我们需要执行一些与单个对象无关的清理，或者与没有析构函数的对象相关联（例如，因为它是与 C 程序共享的类型）怎么办？我们可以定义一个函数 final（），该函数在退出作用域时执行一个动作
+
+```c++
+void old_type (int n) {  
+    void* p = (void*) malloc(n * sizeof (int )); // C-type  
+    auto act = finally([&]{ free(p); }); // call the lambda upon scope exit  
+}// p is implicitly freed upon scope exit
+```
+
+- 这是临时的，但比尝试在函数的所有出口上正确且一致地调用 free（p） 要好得多。
+
+```c++
+template <class F>  
+struct Final_action {  
+    explicit Final_action(F f): act(f) {}  
+    ~Final_action() { act(); }  
+    F act;  
+};  
+  
+template <class F>  
+[[nodiscard]] auto finally(F f) {  
+    return Final_action {f};  
+}
+```
+
+- 使用 **\[\[nodiscard]]** 来确保用户不会忘记将生成的**Final_action**复制到其操作的预期范围内
+- 而**Final_action**需要提供如上所示必须的析构函数
+
+> [!tip] \[\[nodiscard]]属性其实就是声明，该函数、类、表达式的返回值是必须的
+
+```c++
+[[nodiscard("The empty return value must be used")]]  
+bool empty() {  
+    return false;  
+}
+```
+
+- 在C++17中，可以使用该属性，但是如果你不使用其返回值实际上也不会报错，但是在C++20中，可以在该属性中输入字符文本，这时如果未使用则会报错
+
+## 7.4 Template Mechnisms
+
