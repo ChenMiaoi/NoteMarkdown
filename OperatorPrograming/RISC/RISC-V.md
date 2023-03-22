@@ -435,3 +435,133 @@ $ nm -a a.out
 0000000000004014 d static_var.2317
 000000000000401c b static_var_uninit.2318
 ```
+
+## 嵌入式开发
+
+> 嵌入式开发是一种综合性的技术，不单指纯粹的软件开发技术，也不单是一种硬件配置技术，是在特定的硬件环境下针对某款硬件进行开发，是一种系统级别的与硬件结合比较紧密的软件开发技术
+
+### 交叉编译
+
+> 交叉编译在嵌入式中非常常见，因为各种目标机平台的不同，因此需要交叉编译
+
+- 参与编译核运行的机器可分为以下三类：
+	- 构建系统(`build`)：**执行编译构建动作**的计算机
+	- 主机系统(`host`)：**运行build系统生成的可执行程序**的计算机
+	- 目标系统(`target`)：**特别地，当以上生成的可执行程序是`GCC`时，我们用`target`来描述用来运行`GCC`讲生成的可执行程序**的计算机
+- 因此，我们的编译方式可以有以下分类：
+	- **本地编译(`native`)**：build == host == target
+	- **交叉编译(`cross`)**：build == host != target
+
+> 而我们所要学习的正是交叉编译链：`riscv64-unkown-elf-gcc`
+
+![[riscv-toolchain.png]]
+
+``` c
+#include <stdio.h>
+
+int main()
+{
+	printf("hello world\n");
+	return 0;
+}
+```
+
+- 使用交叉编译工具链进行编译
+
+```linux
+$ riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 hello.c
+```
+
+#### 安装riscv-gnu-toolchain
+
+> 我们所使用的环境是基于RISVC架构的裸机开发，因此需要自行编译工具链
+
+- 首先下载需要的依赖(Ubuntu)
+
+```linux
+$ sudo apt-get update
+$ sudo apt-get install autoconf automake autotools-dev curl python3 libmpc-dev libmpfr-dev libgmp-dev gawk build-essential bison flex texinfo gperf libtool patchutils bc zlib1g-dev libexpat-dev ninja-build
+```
+
+- 从官方拉去官方源 -> 该过程较慢，官方称有6.5G大小
+
+```git
+git clone --recursive https://github.com/riscv-collab/riscv-gnu-toolchain.git
+```
+
+- 进入该文件夹配置需要下载的架构
+- 因为我们需要使用32位架构，此处使用`--enable-multi`编译64bit和32bit
+
+```linux
+$ ./configure --prefix=/opt/riscv --enable-multi
+```
+
+- `--prefix`：设置默认安装的路径
+- `--enable-multi`：同时编译32位和64位
+
+- 配置无误后，会在该文件夹下生成`Makefile`
+
+```linux
+$ sudo make -j$(nproc)
+```
+
+- 根据实际，**同时编译32&64 12核应该在1h左右**
+
+#### QEMU
+
+- 准备依赖
+
+``` linux
+$ sudo apt install autoconf automake autotools-dev curl libmpc-dev libmpfr-dev libgmp-dev \
+                 gawk build-essential bison flex texinfo gperf libtool patchutils bc \
+                 zlib1g-dev libexpat-dev git \
+                 libglib2.0-dev libfdt-dev libpixman-1-dev \
+                 libncurses5-dev libncursesw5-dev
+```
+
+> 我们有了交叉编译工具链后，还需要能够运行的平台。而`qemu`则能够支持编译运行
+
+- 在官方网站下载编码进行编译
+
+```linux
+$ wget https://download.qemu.org/qemu-7.0.0.tar.xz
+$ tar xvJf qemu-7.0.0.tar.xz
+```
+
+- **后面的版本号可以根据需要自行修改**
+
+- 配置编译qemu
+
+``` linux
+$ ./configure --prefix=/opt/qemu --enable-kvm --target-list=riscv64-softmmu
+$ make -j$(nproc)
+$ sudo make install
+```
+
+- `--prefix`：默认的安装路径
+- `--enable-kvm`：支持kvm虚拟机
+- `--target-list`：支持的架构
+
+#### 配置PATH
+
+> 由于我们自定义了其安装路径，因此我们需要自行指出路径
+
+``` linux
+$ vim .bashrc
+
+export PATH=$PATH:/home/user/riscv-tool/bin:/opt/qemu/bin
+```
+
+### Make
+
+> `make`是一种自动化工程管理工具
+
+#### Makefile
+
+>  `Makefile`：配合`make`，用于描述构建工程中所管理的对象以及如何构建工程的过程
+
+- Makefile由一条或多条规则组成，而每条规则都有三要素
+	- `target`：目标，可以是`obj`文件也可以是可执行文件
+	- `prerequisites`：生成`target`所需要的依赖
+	- `command`：为了生成`target`需要执行的命令，可以由多条
+
