@@ -533,7 +533,7 @@ $ tar xvJf qemu-7.0.0.tar.xz
 - 配置编译qemu
 
 ``` linux
-$ ./configure --prefix=/opt/qemu --enable-kvm --target-list=riscv64-softmmu
+$ ./configure --target-list=riscv64-softmmu,riscv64-linux-user --prefix=/opt/qemu
 $ make -j$(nproc)
 $ sudo make install
 ```
@@ -565,3 +565,276 @@ export PATH=$PATH:/home/user/riscv-tool/bin:/opt/qemu/bin
 	- `prerequisites`：生成`target`所需要的依赖
 	- `command`：为了生成`target`需要执行的命令，可以由多条
 
+### 练习：使用riscv工具链
+
+#### 练习4-1
+
+> 熟悉交叉编译概念，使用`riscv gcc`编译代码并使用`binutils`工具对生成的目标文件核可执行文件(ELF格式)进行分析
+
+- 具体要求如下
+	- 编写一个简单的打印"hello world！"的程序源文件：`hello.c`
+	- 对源文件进行编译，生成针对支持`rv32im`指令集架构处理器的目标文件`hello.o`
+	- 查看`hello.o`的文件的文件头信息
+	- 查看`hello.o`的`Section Header Table`
+	- 对`hello.o`反汇编，并查看`hello.c`的C程序源码和机器指令的对应关系
+
+- 首先先编写源文件`hello.c`
+
+``` c
+#include <stdio.h>
+
+int main()
+{
+	printf("hello world!\n");
+	return 0;
+}
+```
+
+- 通过`riscv gcc`对源文件进行编译，此处使用`Makefile`
+
+``` Makefile
+GCC=riscv64-unknown-elf-gcc
+ARCH=-march=rv32im
+ABI=-mabi=ilp32
+QEMU=qemu-riscv32
+DEBUG=-g
+
+hello:hello.o
+    $(GCC) $(ARCH) $(ABI) $^ -o $@
+hello.o:hello.c
+    $(GCC) $(ARCH) $(ABI) $^ -c $@
+
+.PHONY:run
+run:
+    $(QEMU) ./hello
+
+.PHONY:debug
+debug:
+    $(GCC) $(ARCH) $(ABI) hello.c -c hello.o $(DEBUG)
+    $(GCC) $(ARCH) $(ABI) hello.o -o hello $(DEBUG)
+
+.PHONY:clean
+clean:
+    rm -rf hello hello.o
+```
+
+- 通过`make`以及编写好的`Makefile`对源文件进行编译，同时生成`hello.o`和可执行文件`hello`
+
+```linux
+$ make
+riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 hello.c -c hello.o
+riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 hello.o -o hello
+```
+
+- 使用`readelf`查看文件头
+
+```linux
+$ riscv64-unknown-elf-readelf -h hello.o
+ELF Header:
+  Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00 
+  Class:                             ELF32
+  Data:                              2's complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              REL (Relocatable file)
+  Machine:                           RISC-V
+  Version:                           0x1
+  Entry point address:               0x0
+  Start of program headers:          0 (bytes into file)
+  Start of section headers:          592 (bytes into file)
+  Flags:                             0x0
+  Size of this header:               52 (bytes)
+  Size of program headers:           0 (bytes)
+  Number of program headers:         0
+  Size of section headers:           40 (bytes)
+  Number of section headers:         11
+  Section header string table index: 10
+```
+
+- 查看`Section Header Table`
+
+```linux
+$ riscv64-unknown-elf-readelf -S hello.o
+There are 11 section headers, starting at offset 0x250:
+
+Section Headers:
+  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            00000000 000000 000000 00      0   0  0
+  [ 1] .text             PROGBITS        00000000 000034 000038 00  AX  0   0  4
+  [ 2] .rela.text        RELA            00000000 0001b4 000048 0c   I  8   1  4
+  [ 3] .data             PROGBITS        00000000 00006c 000000 00  WA  0   0  1
+  [ 4] .bss              NOBITS          00000000 00006c 000000 00  WA  0   0  1
+  [ 5] .rodata           PROGBITS        00000000 00006c 00000d 00   A  0   0  4
+  [ 6] .comment          PROGBITS        00000000 000079 00001c 01  MS  0   0  1
+  [ 7] .riscv.attributes RISCV_ATTRIBUTE 00000000 000095 00002a 00      0   0  1
+  [ 8] .symtab           SYMTAB          00000000 0000c0 0000c0 10      9  10  4
+  [ 9] .strtab           STRTAB          00000000 000180 000031 00      0   0  1
+  [10] .shstrtab         STRTAB          00000000 0001fc 000054 00      0   0  1
+```
+
+- 使用`objdump`进行反汇编
+
+```linux
+$ riscv64-unknown-elf-objdump -S hello.o
+hello.o:     file format elf32-littleriscv
+
+
+Disassembly of section .text:
+
+00000000 <main>:
+   0:   ff010113                add     sp,sp,-16
+   4:   00112623                sw      ra,12(sp)
+   8:   00812423                sw      s0,8(sp)
+   c:   01010413                add     s0,sp,16
+  10:   000007b7                lui     a5,0x0
+  14:   00078513                mv      a0,a5
+  18:   00000097                auipc   ra,0x0
+  1c:   000080e7                jalr    ra # 18 <main+0x18>
+  20:   00000793                li      a5,0
+  24:   00078513                mv      a0,a5
+  28:   00c12083                lw      ra,12(sp)
+  2c:   00812403                lw      s0,8(sp)
+  30:   01010113                add     sp,sp,16
+  34:   00008067                ret
+```
+
+#### 练习4-2
+
+> 基于4-1继续熟悉qemu/gdb等工具
+
+- 具体要求如下：
+	- 将`hello.c`编译为可调试版本的可执行程序
+	- 先执行`qemu-riscv32`运行`hello`
+	- 使用`qemu-riscv32`和`gdb`调试`hello`
+
+- 在上面，我们通过`Makefile`可以构建出带有调试信息的可执行文件
+
+```linux
+$ make debug
+riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 hello.c -c hello.o -g
+riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 hello.o -o hello -g
+```
+
+ - 使用`qemu-rv32`运行
+
+```linux
+$ make run
+qemu-riscv32 ./hello
+hello world!
+```
+
+##### 使用qemu & gdb进行调试
+
+- 第一步，我们需要通过qemu来启动程序(原则上已经生成可调试的执行文件)
+
+```linux
+$ qemu-riscv32 -singlestep -g 8081 hello
+```
+
+- 此时，qemu已经通过该命令加载了程序
+	- `-g`：wait gdb connection to `port`
+- **需要注意的是，执行成功后，需要在另外一个窗口执行接下来的操作**
+
+- 使用`gdb`进入调试模式
+
+```linux
+$ riscv64-unknown-elf-gdb hello
+```
+
+- **进入后需要执行`target remote localhost:port`来连接qemu**
+
+```linux
+(gdb) target remote localhost:8081
+Remote debugging using localhost:8081
+0x000100dc in _start ()
+```
+
+- 此时就可以和`gdb`正常操作调试一致
+
+```linux
+(gdb) l
+1       #include <stdio.h>
+2
+3       int main() 
+4       {
+5           printf("hello world!\n");
+6           return 0;
+7       }
+(gdb) b 5
+Breakpoint 1 at 0x1019c: file hello.c, line 5.
+(gdb) c
+Continuing.
+Breakpoint 1, main () at hello.c:5
+5           printf("hello world!\n");
+(gdb) n
+6           return 0;
+(gdb) n
+7       }
+(gdb) n
+0x00010124 in _start ()
+```
+
+- 需要注意的是，在远程连接状态下，gdb无法使用run命令
+- 使用`gdb`查看汇编
+
+```linux
+(gdb) disassemble main 
+Dump of assembler code for function main:
+   0x0001018c <+0>:     addi    sp,sp,-16
+   0x00010190 <+4>:     sw      ra,12(sp)
+   0x00010194 <+8>:     sw      s0,8(sp)
+   0x00010198 <+12>:    addi    s0,sp,16
+   0x0001019c <+16>:    lui     a5,0x13
+   0x000101a0 <+20>:    addi    a0,a5,1408 # 0x13580
+   0x000101a4 <+24>:    jal     ra,0x10408 <puts>
+   0x000101a8 <+28>:    li      a5,0
+   0x000101ac <+32>:    mv      a0,a5
+   0x000101b0 <+36>:    lw      ra,12(sp)
+   0x000101b4 <+40>:    lw      s0,8(sp)
+   0x000101b8 <+44>:    addi    sp,sp,16
+   0x000101bc <+48>:    ret
+End of assembler dump.
+```
+
+#### 练习4-3
+
+> 自学`Makefile`语法，理解下面代码的含义
+
+```Makefile
+SECTIONS = \
+	code/asm \
+	code/os \
+
+.DEFAULT_GOAL := all
+all :
+	@echo "begin compile ALL exercises for assembly samples ......................."
+	for dir in $(SECTIONS); do $(MAKE) -C $$dir || exit "$$?"; done
+	@echo "compile ALL exercises finished successfully! ......"
+
+.PHONY : clean
+clean:
+	for dir in $(SECTIONS); do $(MAKE) -C $$dir clean || exit "$$?"; done
+
+.PHONY : slides
+slides:
+	rm -f ./slides/*.pdf
+	soffice --headless --convert-to pdf:writer_pdf_Export --outdir ./slides ./docs/ppts/*.pptx
+```
+
+## RISC-V asm
+
+### 汇编语言介绍
+
+> 汇编语言(Assembly Language)是一种“低级”语言。
+
+- 汇编语言的缺点很明显：
+	- 难读
+	- 难写
+	- 难移植
+- 但是优点又能够使其不断发展：
+	- 灵活
+	- 强大
+- 汇编语言常用于**需要直接访问底层硬件的地方，需要对性能执行极致优化的地方**
+
+### RV介绍
