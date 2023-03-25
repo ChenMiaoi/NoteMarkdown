@@ -837,4 +837,644 @@ slides:
 	- 强大
 - 汇编语言常用于**需要直接访问底层硬件的地方，需要对性能执行极致优化的地方**
 
-### RV介绍
+### RV32介绍
+
+#### 基本信息
+
+- 寄存器
+	- rv中有32个通用寄存器，x0~x31
+	- 在rv中，Hart(**rv中的术语，指CPU执行流**)在执行算术逻辑运算时所操作的数据必须来自寄存器
+- 内存
+	- Hart可以执行寄存器和内存之间的数据读写操作
+	- 读写操作使用字节为基本单位进行寻址
+	- rv32最多可以访问$2^{32}$字节的内存空间
+
+- 此处是rv32中的通用寄存器组所带的特殊含义
+
+![[RV32 Register.png]]
+
+#### 汇编指令编码格式
+
+> RV32中具有六种编码格式，每一种格式内部的指令序列都有一定的差异
+
+![[code type.png]]
+
+- 编码解释：
+	- opcode：判断一个编码的类型，首先通过该field中的6~2位判断
+	- funct3/funct7：配合opcode能够决定一个具体的汇编指令
+	- rd：register destination，目的寄存器
+	- rs：register source，源寄存器
+	- imm：immediate，立即数
+
+![[opcode table.png]]
+
+- 类型解释：
+	- R-type：`Register`，每条指令中带有三个`fields`，用于指定3个寄存器参数
+	- I-type：`Immediate`，每条指令除了带有两个寄存器之外，还带有一个立即数参数(其宽度为12bits)
+	- S-type：`Store`，每条指令除了带有两个寄存器参数外，还带有一个立即数参数
+	- B-type：`Branch`，每条指令除了带有两个寄存器参数外，还带有一个立即数参数(取值为2的倍数)
+	- U-type：`Upper`，每条指令含有一个寄存器参数再加上一个立即数参数(宽度为20bits)
+	- J-type：`Jump`，每条指令含有一个寄存器参数再加上一个立即数参数(宽度为20bits)
+
+#### 算术运算指令
+
+##### ADD
+
+> 在RV32中，提供了add的汇编指令
+
+- ADD汇编指令编码格式
+
+![[ADD type.png]]
+
+- 格式解析：
+	- opcode(7)：011 0011对应表中的`OP`类型操作
+	- funct3取值000
+	- funct7取值000 0000
+	- rs1(5)：第一个operand
+	- rs2(5)：第二个operand
+	- rd(5)：目的寄存器，存放求和结果
+
+- 具体代码
+
+```risc-v
+# add
+# Format:
+#       ADD RD, RS1, RS2
+
+    .text               # define beginning of text section
+    .global _start      # define entry _start
+
+_start:
+    li x6, 1            # x6 = 1
+    li x7, 2            # x7 = 2
+    add x5, x6, x7      # x5 = x6 + x7
+
+    .end                # end of file
+```
+
+- 反汇编代码
+
+``` asm
+Disassembly of section .text:
+
+80000000 <_start>:
+
+    .text               # define beginning of text section
+    .global _start      # define entry _start
+
+_start:
+    li x6, 1            # x6 = 1
+80000000:       00100313                li      t1,1
+    li x7, 2            # x7 = 2
+80000004:       00200393                li      t2,2
+    add x5, x6, x7      # x5 = x6 + x7
+80000008:       007302b3                add     t0,t1,t2
+```
+
+##### SUB
+
+> 在RV32中，提供了sub的汇编指令
+
+- SUB汇编指令编码格式
+
+![[SUB type.png]]
+
+- 格式解析：
+	- opcode(7)：011 0011对应表中的`OP`类型操作
+	- funct3取值000
+	- funct7取值010 0000
+	- rs1(5)：第一个operand
+	- rs2(5)：第二个operand
+	- rd(5)：目的寄存器，存放相减结果
+
+- 具体代码
+
+``` risc-v
+# sub
+# Format:
+#       SUB RD, RS1, RS2
+
+    .text
+    .global _start
+
+_start:
+    li x6, -1           # x6 = -1
+    li x7, -2           # x7 = -2
+    sub x5, x6, x7      # x5 = x6 - x7
+
+    .end
+```
+
+- 反汇编代码
+
+```asm
+Disassembly of section .text:
+
+80000000 <_start>:
+
+    .text
+    .global _start
+
+_start:
+    li x6, -1           # x6 = -1
+80000000:       fff00313                li      t1,-1
+    li x7, -2           # x7 = -2
+80000004:       ffe00393                li      t2,-2
+    sub x5, x6, x7      # x5 = x6 - x7
+80000008:       407302b3                sub     t0,t1,t2
+```
+
+##### ADDI
+
+> add的立即数版本汇编指令
+
+- ADDI汇编指令编码格式
+
+![[ADDI type.png]]
+
+- 格式解析：
+	- opcode(7)：011 0011对应表中的`OP`类型操作
+	- funct3取值000
+	- imm(12)：12位立即数
+	- rs1(5)：第一个operand
+	- rd(5)：目的寄存器，存放相减结果
+
+- 具体代码
+
+```risc-v
+# addi
+# Format:
+#       ADDI RD, RS, %imm
+
+    .text
+    .global _start
+
+_start:
+    li x6, 6            # x6 = 6
+    addi x5, x6, -7;    # x5 = x6 + -7
+
+    .end
+```
+
+- 反汇编代码
+
+```asm
+Disassembly of section .text:
+
+80000000 <_start>:
+
+    .text
+    .global _start
+
+_start:
+    li x6, 6            # x6 = 6
+80000000:       00600313                li      t1,6
+    addi x5, x6, -7;    # x5 = x6 + -7
+80000004:       ff930293                add     t0,t1,-7
+```
+
+- **注意**：
+	- **addi指令中的立即数在参与运算前会被符号扩展为一个32位的数**
+	- 该立即数的表示范围为：$[-2^{11}, +2^{11})$
+	- *RISC-V*没有提供SUBI指令，因为SUBI指令可由ADDI实现
+
+##### LUI(Load Upper Immediate)
+
+> 由于ADDI的局限性：**立即数的范围只能是$[-2^{11}, +2^{11})$**，那么对于超出这一范围的立即数就无能为力，因此提供了LUI指令
+
+- lui汇编指令编码格式
+
+![[LUI type.png]]
+
+- 格式解析：
+	- opcode(7)：011 0111对应表中的`LUI`类型操作
+	- imm(20)：20位立即数
+	- rd(5)：目的寄存器，存放结果
+- **LUI指令会构造一个32bits的立即数，这个立即数的高20位由指令中imm提供，低12位清零**
+
+- 具体代码
+- 利用LUI和ADDI指令为寄存器加载一个大数 0x12345678
+
+```risc-v
+# lui
+# Format:
+#       LUI RD, IMM
+
+    .text              
+    .global _start      
+
+_start:
+    lui x5, 0x12345     # int x5 = 0x12345 << 12
+    addi x5, x5, 0x678  # x5 = x5 + 0x678
+
+    .end                # End of file
+```
+
+- 加载大数 0x12345FFF
+- 我们需要注意的是：**使用LUI后，剩下了0xFFF，那么经过符号扩展后，应该是0xFF..FFF**
+- 因此，可以使用LUI加载大一位，然后减1
+
+```risc-v
+    .text              
+    .global _start      
+
+_start:
+    lui x5, 0x12346     # int x5 = 0x12346 << 12
+    addi x5, x5, -1     # x5 = x5 - 1
+
+    .end                # End of file
+```
+
+##### AUIPC
+
+> 除了立即数会进行符号扩展来解决位数不够的问题，地址会有由相同的问题。因此，RV提供了AUIPC(Add Upper Immediate PC)
+
+- AUIPC汇编指令编码格式
+
+![[AUIPC type.png]]
+
+- 格式解析：
+	- opcode(7)：001 0111对应表中的`AUIPC`类型操作
+	- imm(20)：20位立即数
+	- rd(5)：目的寄存器，存放结果
+- **与LUI类似的，AUIPC指令会构造一个32bits的立即数，这个立即数的高20位由指令中imm提供，低12位清零。同时，在此基础上，会加上PC的值**
+
+- 具体代码
+
+```risc-v
+# Add Upper Immediate to PC
+# Format:
+#       AUIPC RD, IMM
+
+    .text               # Define beginning of text section
+    .global _start      # Define entry _start
+
+_start:
+    auipc x5, 0x12345   # x5 = PC + (0x12345 << 12)
+    auipc x6, 0         # x6 = PC, to obtain the current PC
+
+    .end
+```
+
+- 反汇编代码
+
+```asm
+Disassembly of section .text:
+
+80000000 <_start>:
+
+        .text                       # Define beginning of text section
+        .global _start              # Define entry _start
+
+_start:
+        auipc x5, 0x12345           # x5 = PC + (0x12345 << 12)
+80000000:       12345297                auipc   t0,0x12345
+        auipc x6, 0                 # x6 = PC, to obtain the current PC
+80000004:       00000317                auipc   t1,0x0
+```
+
+##### 伪指令NEG
+
+> NEG伪指令是由SUB汇编指令而来，其基本操作是对一个寄存器中的值进行求反
+
+- 其对应关系为：
+
+$$
+	neg \quad rd,\  rs \Leftrightarrow sub \quad rd,\ x0,\ rs
+$$
+
+- 具体代码
+
+``` risc-v
+# neg
+# Format:
+#       NEG RD, RS
+
+    .text
+    .global _start
+
+_start:
+    li x6, 1           # x6 = 1
+    neg x5, x6         # sub x5, x0, x6  
+    sub x5, x0, x6     # x5 = x0 - x6
+    # neg是伪指令，其内部汇编代码就是 sub rd, 0, rs2
+
+    .end
+```
+
+- 反汇编代码
+
+```asm
+Disassembly of section .text:
+
+80000000 <_start>:
+
+    .text
+    .global _start
+
+_start:
+    li x6, 1 # x6 = 1
+80000000:       00100313                li      t1,1
+    neg x5, x6
+80000004:       406002b3                neg     t0,t1
+    sub x5, x0, x6 # x5 = x0 - x6
+80000008:       406002b3                neg     t0,t1
+```
+
+##### 伪指令MV
+
+> MV伪指令是由ADDI汇编指令而来，其基本操作是对一个寄存器中的值拷贝到另一个寄存器
+
+- 其对应关系为：
+
+$$
+	mv \quad rd,\ rs \Leftrightarrow addi \quad rd,\ rs,\ x0
+$$
+
+- 具体代码
+
+```risc-v
+# mv
+# Format:
+#       MV RD, RS
+
+    .text
+    .global _start
+
+_start:
+
+    li x6, 30           # x6 = 30
+    mv  x5, x6          # x5 = x6
+    addi x5, x6, 0;     # x5 = x6 + 0  
+    # mv是一条伪指令，其内部汇编为addi rd, rs1, 0
+
+    .end
+```
+
+- 反汇编代码
+
+```asm
+Disassembly of section .text:
+
+80000000 <_start>:
+
+    .text
+    .global _start
+
+_start:
+    li x6, 30 # x6 = 30
+80000000:       01e00313                li      t1,30
+    mv  x5, x6 # x5 = x6
+80000004:       00030293                mv      t0,t1
+    addi x5, x6, 0; # x5 = x6 + 0  
+80000008:       00030293                mv      t0,t1
+```
+
+##### 伪指令NOP
+
+> MOP伪指令是由ADDI汇编指令而来，其基本操作是空操作
+
+- 其对应关系为
+
+$$
+	nop \Leftrightarrow addi \quad x0,\ x0, 0
+$$
+
+- 具体代码
+
+```risc-v
+# nop
+# Format:
+#       NOP
+
+    .text
+    .global _start
+
+_start:
+    nop
+    addi x0, x0, 0; # x0 = x0 + 0
+    # nop是一条伪指令，其内部汇编为addi x0, x0, 0
+```
+
+- 反汇编代码
+
+```asm
+Disassembly of section .text:
+
+80000000 <_start>:
+
+    .text
+    .global _start
+
+_start:
+    nop
+80000000:       00000013                nop
+    addi x0, x0, 0; # x0 = x0 + 0
+80000004:       00000013                nop
+```
+
+##### 伪指令LI
+
+> 由于ADDI会使imm立即数进行符号扩展导致一些意料之外的事情发生，因此为了方便且自动选择合适的方法赋值，RV提供了LI汇编伪指令
+
+- **编译器会根据IMM的实际情况自动生成正确的真实指令**
+
+- 具体代码
+
+```risc-v
+# Load Immediate
+# Format:
+#       LI RD, IMM
+
+    .text
+    .global _start
+
+_start:
+    # 如果立即数的范围在[-2048, +2048)
+    li x5, 0x80             # x5 = 0x80
+    # 以下是等价汇编指令
+    addi x5, x0, 0x80;      # x5 = x0 + 0x80
+
+    # 如果立即数的范围不在[-2048, +2048)且最高符号位是0
+    li x6, 0x12345001       # x6 = 0x12345001
+    # 以下是等价汇编指令
+    lui x6, 0x12345
+    addi x6, x6, 0x001;     # x6 = x6 + 0x001
+
+    # 如果立即数的范围不在[-2048, +2048)且最高符号位是1
+    li x7, 0x12345FFF # x7 = 0x12345FFF
+    # 以下是等价汇编指令
+    lui x7, 0x12346
+    addi x7, x7, -1; # x7 = x7 + -1
+
+    .end
+```
+
+- 反汇编代码
+
+```asm
+Disassembly of section .text:
+
+80000000 <_start>:
+    .text
+    .global _start
+
+_start:
+    # 如果立即数的范围在[-2048, +2048)
+    li x5, 0x80             # x5 = 0x80
+80000000:       08000293                li      t0,128
+    # 以下是等价汇编指令
+    addi x5, x0, 0x80;      # x5 = x0 + 0x80
+80000004:       08000293                li      t0,128
+    
+    # 如果立即数的范围不在[-2048, +2048)且最高符号位是0
+    li x6, 0x12345001       # x6 = 0x12345001
+80000008:       12345337                lui     t1,0x12345
+8000000c:       00130313                add     t1,t1,1 # 12345001 <_start-0x6dcbafff>
+    # 以下是等价汇编指令
+    lui x6, 0x12345
+80000010:       12345337                lui     t1,0x12345
+    addi x6, x6, 0x001;     # x6 = x6 + 0x001
+80000014:       00130313                add     t1,t1,1 # 12345001 <_start-0x6dcbafff>
+    
+    # 如果立即数的范围不在[-2048, +2048)且最高符号位是1
+    li x7, 0x12345FFF # x7 = 0x12345FFF
+80000018:       123463b7                lui     t2,0x12346
+8000001c:       fff38393                add     t2,t2,-1 # 12345fff <_start-0x6dcba001>
+    # 以下是等价汇编指令
+    lui x7, 0x12346
+80000020:       123463b7                lui     t2,0x12346
+    addi x7, x7, -1; # x7 = x7 + -1
+80000024:       fff38393                add     t2,t2,-1 # 12345fff <_start-0x6dcba001>
+```
+
+##### 伪指令LA
+
+> 和LI汇编指令一样的，LA指令是为了AUIPC指令中自行编译为具体实际汇编的指令
+
+- 其在具体编程时给出需要加载的label，编译器会根据实际情况利用AUIPC和其他指令自动生成正确的指令序列
+- **常用于加载一个函数或变量的地址**
+
+- 具体代码
+
+```risc-v
+# Load Address
+# Format:
+#       LA RD, Address
+
+    .text
+    .global _start
+
+_start:
+    la x5, _start       # 
+    jr x5               # jump to x5
+    
+    .end
+```
+
+- 反汇编代码
+
+```asm
+Disassembly of section .text:
+
+80000000 <_start>:
+
+    .text
+    .global _start
+
+_start:
+    la x5, _start       # 
+80000000:       00000297                auipc   t0,0x0
+80000004:       00028293                mv      t0,t0
+    jr x5               # jump to x5
+80000008:       00028067                jr      t0 # 80000000 <_start>
+```
+
+##### 算术运算指令总结
+
+![[Algorithm Instruction.png]]
+
+### 练习
+
+#### 练习5-1
+
+> 对sub指令执行反汇编，查看`sub x5, x6, x7`这条汇编指令对应的机器指令的编码，并对照RISC-V的specification解析这条指令的编码
+
+``` risc-v
+# sub
+# Format:
+#       SUB RD, RS1, RS2
+
+    .text
+    .global _start
+
+_start:
+    li x6, -1           # x6 = -1
+    li x7, -2           # x7 = -2
+    sub x5, x6, x7      # x5 = x6 - x7
+
+stop:
+    j stop
+
+    .end
+```
+
+``` linux
+$ make code
+test.elf:     file format elf32-littleriscv
+
+
+Disassembly of section .text:
+
+80000000 <_start>:
+
+    .text
+    .global _start
+
+_start:
+    li x6, -1           # x6 = -1
+80000000:       fff00313                li      t1,-1
+    li x7, -2           # x7 = -2
+80000004:       ffe00393                li      t2,-2
+    sub x5, x6, x7      # x5 = x6 - x7
+80000008:       407302b3                sub     t0,t1,t2
+
+8000000c <stop>:
+    
+stop:
+    j stop
+8000000c:       0000006f                j       8000000c <stop>
+```
+
+- 可以看见，sub对应的机器码为：`0x407302b3`，查询RISC-V手册，得到：
+
+| 指令 | 31-25 | 24-20 | 19-15 | 14-12 | 11-7 | 6-0 |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| sub | 0100000 | rs2 | rs1 | 000 | rd | 0110011 |  
+
+- 将对应的机器码`0x407302b3`分解：
+	- 0x407302b3 = 0100 0000 0111 0011 0000 0010 1011 0011
+	- 31~25：010 0000 
+	- 24~20：0 0111 rs2寄存器：对应的是x7寄存器
+	- 19~15：0 0110 rs1寄存器：对应的是x6寄存器
+	- 14~12：000 
+	- 11~7：0 0101 目的寄存器：对应的是x5寄存器
+	- 6~0：011 0011 sub对应的操作码
+		- 其中，6~5取01，4~2取100对应的是OP类型指令
+
+> 现知道某条RISC-V的机器指令在内存中的值为：`b3 05 95 00`，从左往右从低地址到高地址，单位为字节，请翻译为对应的汇编指令
+
+- 因为rv汇编是小端序，因此需要转化为：`00 95 05 b3`
+- 将对应的机器码`00 95 05 b3`分解：
+	- 0x00 95 05 b3 = 0000 0000 1001 0101 0000 0101 1011 0011
+	- 进行查表，通过6~5取01，4~2取100可以查到为`OP`类型指令，也就是只能在`ADD`、`SUB`等OP类型中
+	- 查询14~12位取000，查表可得为`ADD`指令
+	- 也就是说该指令大致为：ADD rd, rs1, rs2
+	- 查询11~7得到rd为：0 1011即x11寄存器
+	- 查询19~15得到rs1为：0 1010即x10寄存器
+	- 查询24~20得到rs2为：0 1001即x9寄存器
+- 因此整体的汇编指令为：
+
+```risc-v
+add x11, x10, x9
+```
