@@ -792,3 +792,221 @@ let slice = &a[1..3];
 
 assert_eq!(slice, &[2, 3]);
 ```
+
+### 结构体
+
+> `struct`，或者 `structure`，**是一个自定义数据类型，允许你包装和命名多个相关的值，从而形成一个有意义 的组合。**
+
+#### 定义并实例化结构体
+
+> 定义结构体，需要使用`struct`关键字并为整个结构体提供一个名字。结构体的名字需要描述它所组合的 数据的意义。接着，在大括号中，定义每一部分数据的名字和类型，我们称为 `字段(field)`。
+
+```rust
+struct User {
+	active: bool,
+	username: String,
+	email: String,
+	sign_in_count: u64,
+}
+```
+
+- 定义之后，我们就需要为每个字段指定具体的值来创建这个结构体的实例
+
+```rust
+fn main() {
+	let user1 = User {
+		email: String::from('someone@example.com'),
+		username: String::from("someusername123"),
+		active: true,
+		sign_in_count: 1,
+	};
+}
+```
+
+- 如果想要修改字段中的内容，那么实例化时指定`mut`
+
+```rust
+let mut user1 = {
+	..user1,
+};
+
+user1.email = String::from("xxxx@xx.com");
+```
+
+#### 使用字段初始化简写语法
+
+> 在Rust中，为了简化，**如果我们的参数名和字段名完全相同，那么可以使用`字段初始化简写语法(field init shorthand)`
+
+```rust
+fn build_user(email: String, username: String) -> User {
+	User {
+		email,
+		username,
+		active: true,
+		sign_in_count: 1,	
+	}
+}
+```
+
+#### 使用结构体更新语法
+
+> 使用旧实例的大部分值但改变其部分值来创建一个新的结构体实例通常是很有用的。这可以通过 `结构体更新语法(struct update syntax)`实现
+
+```rust
+let user1 = User {
+		email: String::from('someone@example.com'),
+		username: String::from("someusername123"),
+		active: true,
+		sign_in_count: 1,
+};
+
+let user2 = User {
+	..user1,
+};
+```
+
+- 一旦使用结构体更新语法，**其内部的元素所有权会被转交，因此如果所有字段使用这种赋值，那么只有实现了`Copy Trait`的类型的所有权不会被移动**
+
+```rust
+println!("{}", user1.email);
+
+error[E0382]: borrow of moved value: `user1.username`
+  --> src/main.rs:21:37
+   |
+17 |       let user2 = User {
+   |  _________________-
+18 | |         ..user1
+19 | |     };
+   | |_____- value moved here
+20 |
+21 |       println!("{}, {}", user1.email, user1.username);
+   |                                       ^^^^^^^^^^^^^^ value borrowed here after move
+   |
+   = note: move occurs because `user1.username` has type `String`, which does not implement the `Copy` trait
+   = note: this error originates in the macro `$crate::format_args_nl` which comes from the expansion of the macro `println` (in Nightly builds, run with -Z macro-backtrace for more info)
+```
+
+#### 元祖结构体
+
+> `元组结构体(tuple structs)`有 着结构体名称提供的含义，但没有具体的字段名，只有字段的类型。当你想给整个元组取一个名字，并 使元组成为与其他元组不同的类型时，元组结构体是很有用的，这时像常规结构体那样为每个字段命名 就显得多余和形式化了。
+
+```rust
+struct Color(i32, i32, i32);
+struct Point(i32, i32, i32);
+
+let black = Color(0, 0, 0);
+let origin = Point(0, 0, 0);
+```
+
+#### 类单元结构体
+
+> 我们也可以定义一个没有任何字段的结构体！它们被称为`类单元结构体(unit−like structs)`因为它们类 似于 ()，即” 元组类型” 一节中提到的 unit 类型。类单元结构体常常在你想要在某个类型上实现 trait 但 不需要在类型中存储数据的时候发挥作用。
+
+```rust
+struct AlwayEqual;
+
+let subject = AlwaysEqual;
+```
+
+#### 使用派生Trait: dbg!
+
+> Rust中提供了一个很便利的Trait和宏
+
+```rust
+struct Rectangle {
+	width: u32,
+	height: u32,
+}
+
+let rect1 = Rectangle {
+	width: 30,
+	height: 50,
+};
+
+println!("rect1 is {:?}", rect1);
+
+error[E0277]: `Rectangle` doesn't implement `Debug`
+  --> src/main.rs:19:31
+   |
+19 |     println!("rect1 is {:?}", rect1);
+   |                               ^^^^^ `Rectangle` cannot be formatted using `{:?}`
+   |
+   = help: the trait `Debug` is not implemented for `Rectangle`
+   = note: add `#[derive(Debug)]` to `Rectangle` or manually `impl Debug for Rectangle`
+   = note: this error originates in the macro `$crate::format_args_nl` which comes from the expansion of the macro `println` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider annotating `Rectangle` with `#[derive(Debug)]`
+   |
+10 | #[derive(Debug)]
+   |
+
+```
+
+- 可见，我们无法打印一个复杂类型，这也是理所应当的，在C++中，我们通常重载输出`std::ostream& operator<< (std::ostream&, class&);`来使得输出一个复杂类型
+- 在Rust中，我们可以使用`#[derive(Debug)]`
+
+```rust
+#[derive[Debug]]
+struct Rectangle {
+	width: u32,
+	height: u32,
+}
+
+    Finished dev [unoptimized + debuginfo] target(s) in 0.15s
+     Running `target/debug/project`
+rect1 is Rectangle { width: 30, height: 50 }
+
+```
+
+- 当然，我们希望有一种另外一种格式化打印方式，因此Rust提供了`dbg!`宏，**`dbg!`宏接收一个表达式的所有权，打印出代码中调用dbg!宏所在的文件和行号，以及表达式的结果值，并返回该值的所有权**
+
+```rust
+dbg!(&rect1);
+```
+
+#### 方法语法
+
+> `方法(method)`与函数类似：它们使用 fn 关键字和名称声明，可以拥有参数和返回值，同时包含在某 处调用该方法时会执行的代码。不过方法与函数是不同的，因为它们在结构体的上下文中被定义（或者 是枚举或 trait 对象的上下文，将分别在第六章和第十七章讲解），并且它们第一个参数总是 `self`，它代 表调用该方法的结构体实例。
+
+##### 定义方法
+
+> 从其他的面对对象语言可知，方法是在类中实现的，是面对对象的组成部分。而Rust中也实现了，但不同的是，**Rust的方法是分离的**
+
+```rust
+struct Rectangle {
+	width: u32,
+	height: u32,
+}
+
+impl Rectangle {
+	fn area(&self) -> u32 {
+		self.width * self.height
+	}
+}
+```
+
+- 在 area 的签名中，使用 `&self` 来替代 `rectangle: &Rectangle，&self` 实际上是 `self : &Self` 的缩写。
+
+##### ->运算符
+
+> 如果我们学习过C/C++，那么我们知道，对于一个结构体成员的访问是有两种方式的`.`、`->`。
+> Rust 并没有一个与 −> 等效的运算符；相反，Rust 有一个叫 `自动引用和解引用(automatic referencing and dereferencing)`的功能。方法调用是 Rust 中少数几个拥有这种行为的地方。 它是这样工作的：**当使用 object.something() 调用方法时，Rust 会自动为 object 添加 &、&mut 或 * 以便使 object 与方法签名匹配。**
+
+##### 关联函数
+
+> **所有在 impl 块中定义的函数被称为 关联函数`(associated functions)`，因为它们与 impl 后面命名的类 型相关。我们可以定义不以 self 为第一参数的关联函数（因此不是方法），因为它们并不作用于一个结构体的实例。**
+
+- 比如，我们已经见过的`String::new`函数就是一个关联函数，并且，**Rust推荐new作为结构体的第一个关联函数，用于构造器**
+
+```rust
+struct Rectangle {
+	width: u32,
+	height: u32,
+}
+
+impl Rectangle {
+	fn new(width: u32, height: u32) -> Self {
+		Rectangle { wigth, height }
+	}
+}
+```
+
