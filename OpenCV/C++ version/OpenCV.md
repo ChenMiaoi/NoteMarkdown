@@ -143,3 +143,126 @@ int main() {
 - 注意：你必须在CmakeLists中链接到opencv的库文件才能运行成功。
 	- opencv安装的.so位置 -> **/usr/local/lib**
 
+# OpenCV C++ Version
+
+## Mat类
+
+![[Pasted image 20230610231437.png]]
+
+![[Pasted image 20230610233329.png]]
+
+### Mat类的使用
+
+- Mat创建
+
+``` cpp
+// rows: 构造矩阵的行数
+// cols：矩阵的列数
+// type：存储的数据类型，在CV_8UC(n)上可以创建多通道矩阵(512)，其余则是1~4
+(1) cv::Mat::Mat(int rows, int cols, int type);
+// size：2D数组尺寸量
+(2) cv::Mat::Mat(Size isze, int type);
+// m：已经构建的Mat类矩阵
+// row：在已有矩阵中需要截取的行数范围
+// col：在已有矩阵中需要截取的列数范围
+(3) cv::Mat::Mat(const Mat& m, const Range& row, const Range& col = Range::all());
+// s：给每个矩阵每个像素(通道)赋值的参数变量
+(4) cv::Mat::Mat(int rows, int cols, int type, const Scalar& s);
+
+// 单位矩阵
+cv::Mat::eye(int rows, int cols, int type);
+// 对角矩阵
+cv::Mat::diag(...);
+// 元素全为1
+cv::Mat::ones(...);
+// 元素全为0
+cv::Mat::zeros(...);
+
+
+```
+
+### Mat类数据的存储
+
+![[Pasted image 20230611091245.png]]
+
+![[Pasted image 20230611091335.png]]
+
+- Mat读取
+
+```cpp
+(1) 单通道
+int value = (int)a.at<uchar>(0, 0);
+(2)多通道
+cv::Vec3b vc3 = b.at<cv::Vec3b>(0, 0);
+int first = (int)vc3.val[0];
+```
+
+### Mat类的运算
+
+#### 符号运算
+
+> 支持加减乘除
+
+ ![[Pasted image 20230611093134.png]]
+
+#### 内置函数
+
+![[Pasted image 20230611093324.png]]
+
+## 图像加载与显示
+
+### 图像加载
+
+```cpp
+// filename: 需要读取图像的文件名
+// 读取图像形式的标志
+Mat cv::imread(const Stirng& filename, int flags = IMREAD_COLOR);
+```
+
+### 图像显示
+
+```cpp
+// winname：窗口名称
+// flags：窗口属性设置标志
+void cv::namedWindow(const String& winname, int flags = WINDOW_AUTOSIZE);
+
+// mat：要显示的图像矩阵
+void cv::imshow(const String& winame, InptArray mat);
+```
+
+### 图像保存
+
+```cpp
+// img：将要保存的Mat类矩阵变量
+// params：保存图片格式属性设置
+bool cv::imwrite(
+    const String& filename, 
+    InputArray img, 
+    const std::vector<int>& params = std::vector<int>()
+);
+```
+
+### 视频加载
+
+```cpp
+// apiPreference：读取数据时设置的属性，类如编码格式、是否调用OpenNI
+cv::VideoCapture::VideoCapture(const String& filename, int apiPreference = CAP_ANY);
+```
+
+![[Pasted image 20230611102827.png]]
+
+### 视频保存
+
+```cpp
+// fourcc：压缩帧的4字符编解码器代码
+// fps：保存视频的帧率
+// frameSize：视频帧的尺寸
+// isColor：保存视频是否为彩色视频
+cv::VideoWriter::VideoWriter(
+	const String& filename,
+	int fourcc, 
+	double fps, 
+	Size frameSize, 
+	bool isColor = ture
+);
+```
