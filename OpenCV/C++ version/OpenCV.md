@@ -266,3 +266,170 @@ cv::VideoWriter::VideoWriter(
 	bool isColor = ture
 );
 ```
+
+## 图像颜色空间
+
+### 颜色空间介绍
+
+- RGB颜色
+
+![[Pasted image 20230612103058.png]]
+
+- 图像数据类型间相互转换
+
+```cpp
+// m：输出图像
+// rtype：转换后的数据类型
+// alpha：缩放类型
+// beta：平移系数
+void cv::Mat::convertTo(
+	OutputArray m, 
+	int rtype, 
+	double alpha = 1, 
+	double beta = 0
+) const;
+```
+
+- HSV颜色
+
+![[Pasted image 20230612103632.png]]
+
+- Gray颜色
+
+![[Pasted image 20230612103724.png]]
+
+- 只能彩色转换灰色
+
+### 颜色空间转换
+
+```cpp
+// src：待转换颜色模型的原始图像
+// dst：转换后的目标图像
+// code：颜色空间转换表示
+// dstCn：目标图像中的通道数，为0自动导出
+void cv::cvtColor(
+	InputArray src,
+	OutputArray dst,
+	int code,
+	int dstCn = 0
+);
+```
+
+## 多通道分离合并
+
+### 多通道分离
+
+```cpp
+// m：待分离的多通道
+// mv：分离后的单通道图像
+void cv::split(InputArray m, OutputArrayOfArrays mv);
+```
+
+### 多通道合并
+
+```cpp
+// mv：需要合并的图像向量，每个图像必须拥有相同的尺寸和数据类型
+// dst：合并后输出的图像，通道数等于所有输入图像的通道数总和
+void cv::merge(InputArrayOfArrays mv, OutputArray dst);
+```
+
+## 像素比较
+
+```cpp
+// src1：第一个图像矩阵，可以是任意通道数矩阵
+// src2：尺寸和通道数以及数据类型需要和src1一致
+// dst：保留对应位置较大(较小)灰度值后的图像矩阵
+void cv::min(InputArray src1, InputArray src2, OutputArrat dst);
+void cv::max(InputArray src1, InputArray src2, OutputArrat dst);
+```
+
+- 最大值与最小值寻找
+
+```cpp
+// src：输入单通道矩阵
+// minVal：指向最小值的指针
+// maxVal：指向最大值的指针
+// minLoc：指向最小值位置的指针
+// maxLoc：指向最大值位置的指针
+// mask：掩码矩阵，用于标记范围
+void cv::minMaxLoc(
+	InputArray src,
+	double* minVal,
+	double* maxVal = 0,
+	Point* minLoc = 0,
+	Point* miaxLoc = 0,
+	InputArray mask = noArray()
+);
+```
+
+## 逻辑运算
+
+![[Pasted image 20230612135340.png]]
+
+```cpp
+void cv::bitwise_not(InputArray src, OutputArray dst, InputArray mask = noArray());
+void cv::bitwise_and(
+	InputArray src1, 
+	InputArray src2, 
+	utputArray dst, 
+	InputArray mask = noArray()
+);
+void cv::bitwise_or(
+	InputArray src1, 
+	InputArray src2, 
+	utputArray dst, 
+	InputArray mask = noArray()
+);
+void cv::bitwise_xor(
+	InputArray src1, 
+	InputArray src2, 
+	utputArray dst, 
+	InputArray mask = noArray()
+);
+```
+
+1. 与（AND）逻辑运算符：用于将两幅二值图像进行合并，即对两幅图像中的相同像素位置逐个进行比较，只有当两幅图像都为白点时，输出图像的该位置才是白点，否则为黑点。**与运算可用于去除二进制图像中不需要保留的区域或色块**。
+2. 或（OR）逻辑运算符：用于将两幅二值图像合并成一幅图像，即对比较两个图像每一个像素，只要其中一个像素有白点，则输出图像的该位置就是白点，否则为黑点。**或运算常用于对图像进行腐蚀（逐点比较最小像素值）和膨胀（逐点比较最大像素值）等操作**。
+3. 非（NOT）逻辑运算符：用于将二值图像颜色取反，即将白点变为黑点，将黑点变为白点。**它常用于图像轮廓提取、全局阈值化等操作，可以在黑白图像中高速检测边缘和较小的区域**。
+
+## 图像二值化
+
+### 固定阈值二值化
+
+![[Pasted image 20230612151139.png]]
+
+```cpp
+// src：待二值化的图像，只能是CV_8U和CV_32F类型
+// dst：二值化后的图像
+// thresh：二值化的阈值
+// maxval：二值化过程中的最大值
+// type：选择二值化的方法
+double cv::threshold(
+	InputArray src, 
+	OutputArray dst, 
+	double thresh, 
+	double maxval, 
+	int type
+);
+```
+
+### 自适应阈值二值化
+
+```cpp
+// src：只能是CV_8UC1数据类型
+// maxValue：二值化的最大值
+// adaptiveMethod：自适应确定阈值的方法，
+//     均值法ADAPTIVE_THRESH_MEAN_C和高斯法ADAPTIVE_THRESH_GAUSSIAN_C
+// thresholdType：选择图像二值化方法的标志，只能是BINARY和BINARY_INV
+// blockSize：自适应确定阈值的像素领域大小，一般为3，5，7
+// C：从平均值或加权平均值中减去的常数
+void cv::adaptiveThreshold(
+	InputArray src,
+	OutputArray dst,
+	double maxValue,
+	int adaptiveMethod,
+	int thresholdType,
+	int blockSize,
+	double C
+);
+```
