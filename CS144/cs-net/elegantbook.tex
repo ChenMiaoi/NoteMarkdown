@@ -1,0 +1,54 @@
+\documentclass{elegantbook}
+
+\author{Miao}
+\date{\today}
+\email{chenmiao.ku@gmail.com}
+\usepackage{ntheorem}
+\zhtitle{基于计算机网络笔记}
+\entitle{Computer Network Note}
+\enend{笔记}
+\version{0.10}
+\myquote{Victory won\rq t come to us unless we go to it.}
+\logo{ElegantLaTeX_green.pdf}
+\cover{cover.pdf}
+
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{makecell}
+\usepackage{lipsum}
+\usepackage{texnames}
+
+\lstset{ 
+  backgroundcolor=\color{white},   % 选择代码背景，必须加上\ usepackage {color}或\ usepackage {xcolor}.
+  basicstyle=\bf,                  % 设置代码字号.
+  breakatwhitespace=false,         % 设置是否当且仅当在空白处自动中断.
+  breaklines=true,                 % 设置自动断行.
+  captionpos=b,                    % 设置标题位置.
+  commentstyle=\color{red},    % 设置注释格式
+  deletekeywords={...},            % 是否删除给定语言的关键词.
+  escapeinside={\%*}{*)},          % 是否在代码中添加LaTex.
+  extendedchars=true,              % 是否允许使用非ASCII字符; 仅适用于8位编码，不适用于UTF-8. 
+  frame=single,	                   % 给代码区添加边框.
+  keepspaces=true,                 % 保留空格（useful for keeping indentation of code (possibly needs columns=flexible).
+  keywordstyle=\color{blue},       % 关键字显示风格.
+  language=C++,                    % 使用的语言.
+  morekeywords={*,...},            % 是否需要添加其他的关键词.
+  numbers=left,                    % 给代码添加行号，可取值none, left, right.
+  numbersep=5pt,                   % 设置行号与代码之间的间隔
+  numberstyle=\bf\color{blue},     % 行号的字号和颜色
+  rulecolor=\color{black},         % 边框颜色，如果没有设置，框架颜色可以在非黑色文本中的换行符上更改（例如 text (e.g. comments (green here))）
+  showspaces=false,                % 显示每个地方添加特定下划线的空格; 覆盖了'showtringspaces'
+  showstringspaces=false,          % 仅在字符串中允许空格
+  showtabs=false,                  % show tabs within strings adding particular underscores
+  stepnumber=2,                    % the step between two line-numbers. If it's 1, each line will be numbered
+  stringstyle=\color{green},     % string literal style
+  tabsize=4,	                   % 将默认tab设置为2个空格
+  title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
+}
+
+
+\begin{document}
+    \maketitle
+    \tableofcontents
+    \include{chapter/chapter01}
+\end{document}
