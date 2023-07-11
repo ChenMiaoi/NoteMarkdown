@@ -263,4 +263,290 @@
 
     \emph{在实践中，PSH、URG和紧急数据指针并没有使用。为了完整性起见，我们才提到这些字段}。
 
+\subsubsection{序号和确认号}
+
+    TCP报文段首部中两个最重要的字段是序号字段和确认号字段。这两个字段是TCP可靠传输服务的关键部分。
+
+    TCP把数据看成一个无结构的、有序的字节流。
+
+    假设主机A上的一个进程想通过一条TCP连接向主机B上的一个进程发送一个数据流。主机A中的TCP将隐式地对数据流中的每一个字节编号。假定数据流由一个包含500000字节的文件组成，其MSS为1000字节，数据流的首字节编号是0。如下图所示，该TCP将为该数据流构建500个报文段。给第一个报文段分配序号0, 第二个报文段分配序号1000, 第三个报文段分配序号2000, 以此类推。
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/chapter03/文件数据划分成TCP报文段.png}
+    \caption{文件数据划分成TCP报文段}
+\end{figure}
+
+    现在来讨论确认号。\emph{主机A填充进报文段的确认号是主机A期望从主机B收到的下一字节的序号。}假如主机A已经收到了来自主机B的0~535的所有字节，那么如果想要接收后续的字节，主机A应该往主机B发送536的确认号。
+
+    那么，TCP中如果数据的包有丢失(比如主机A收到了0~535与900~1000的报文段)，很显然，主机A没有接收到536~899的报文段。因此，主机A需要重新构建主机B的数据流，因此A到B的下一个报文段将在确认号中包含536。\emph{因为TCP只确认该流中第一个丢失字节为止的字节，因此TCP被称为提供累计确认(cumulative acknowledgment)}。
+
+    最后，我们来考虑：当主机在一条TCP连接中收到失序报文段时该怎么办？
+
+\begin{itemize}
+    \item [1)] 接收方立即丢弃失序报文段
+    \item [2)] 接收方保留失序的字节，并等待缺少的字节以填补该间隔
+\end{itemize}
+
+    显然，第二种选择对网络贷款更为有效，是实践中采用的方法。
+
+\subsubsection{Telnet: 序号和确认号的一个学习案例}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/chapter03/经TCP的简单Telnet链接.png}
+    \caption{一个经TCP的简单Telnet应用的确认号和序号}
+\end{figure}
+
+    假设A发起会话(因此，主机A被标记为客户)。假设客户和服务器的起始序号分别为42和79,\emph{一个报文段的序号就是该报文段数据字段首字节的序号。确认号就是主机正在等待的数据的下一个字节序号。}
+
+    因此，客户发送的第一个报文段序号为42，请求服务器的确认号为79。
+
+    第二个报文段由服务器发往客户。首先为该服务器收到的数据提供一个确认，因此在确认号中填入了43，然后回显了字符'C'，因此在data段中填入了字符'C'。
+
+    \emph{值得注意的是，对客户到服务器的数据的确认被装载在一个承载服务器到客户的数据的报文段中；这种确认被称为是被捎带（piggybacked）在服务器到客户的数据报文段中的。}
+
+    第三个报文段是从客户端发往服务器。其唯一目的是确认已从服务器收到的数据。因此确认号中填入的80.
+
+\subsection{往返实践的估计与超时}
+
+    \emph{TCP采用超时/重传机制来处理报文段的丢失问题。}
+
+\subsubsection{估计往返时间}
+
+    TCP通过如下方式估计往返时间：报文段的样本RTT(表示为SampleRTT)就是从某报文段被发出(即交给IP)到对该报文段的确认被收到之间的时间量。
+
+    \emph{在任意时刻，仅为一个已发送的但目前尚未被确认的报文段估计SampleRTT,从而产生一个接近每个RTT的新SampleRTT值。另外，TCP决不为已被重传的报文段计算SampleRTT；它仅为传输一次的报文段测量SampleRTT。}
+
+    由于路由器的拥塞和端系统负载的变化，这些报文段的SampleRTT值会随之波动。由于这种波动，任何给定的SampleRTT值也许都是非典型的。因此，为了估计一个典型的RTT,自然要采取某种对SampleRTT取平均的办法。TCP维持一个SampleRTT均值 (称为EstimatedRT)。一旦获得一个新SampleRTT时，TCP就会根据下列公式来更新EstimatedRTT:
+
+$$
+    EstimatedRTT = (1 - \alpha) \cdot EstimatedRTT + \alpha \cdot SampleRTT
+$$
+
+    即，\emph{EstimatedRTT的新值由以前的值与SampleRTT新值加权组合而来，$\alpha = 0.125$}
+
+$$
+    EstimatedRTT = 0.875 \cdot EstimatedRTT + 0.125 \cdot SampleRTT
+$$
+
+    值得注意的是，EstimatedRTT是一个SampleRTT值的加权平均值。
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/chapter03/RTT样本与RTT估计.png}
+    \caption{RTT样本与RTT估计}
+\end{figure}
+
+    [RFC 6298]定义了 RTT偏差DevRTT,用于估算SampleRTT 一般会偏离EstimatedRTT的程度：
+
+$$
+    DevRTT = (1 - \beta) \cdot DevRTT + \beta \cdot | SampleRTT - EstimatedRTT |
+$$
+
+    注意到DevRTT是一个SampleRTT与EstimatedRTT之间差值的EWMA\footnote[1]{从统计学观点讲，这种平均被称为指数加权移动平均(Exponential Weighted Moving Average, EWMA)。在 EWMA中的“指数” 一词看起来是指一个给定的SampleRTT的权值在更新的过程中呈指数型快速衰减。}。如果SampleRTT值波动较小，那么DevRTT的值就会很小；另一方面，如果波动很大，那么DevRTT的值就会很大。$\beta$的推荐值为0. 25。
+
+\subsubsection{设置和管理重传超时间隔}
+
+    假设已经给岀了EstimatedRTT值和DevRTT值，超时间隔应该大于等于EstimatedRTT,否则，将造成不必要的重传。但是超时间隔也不应该比EstimatedRTT大太多，否则当报文段丢失时，TCP不能很快地重传该报文段，导致数据传输时延大。
+
+$$
+    Timeoutinterval = EstimatedRTT + 4 \cdot DevRTT
+$$
+
+    推荐的初始Timeoutinterval值为1秒[RFC 6298]。同时，当出现超时后，TimeoutInterval值将加倍，以免即将被确认的后继报文段过早出现超时。然而，只要收到报文段并更新EstimatedRTT,就使用上述公式再次计算TimeoutInterva
+
+\subsection{可靠数据传输}
+
+    \emph{因特网的网络层服务(IP服务)是不可靠的。IP不保证数据报的交付,不保证数据报的按序交付，也不保证数据报中数据的完整性}。
+
+    TCP在IP不可靠的尽力而为服务之上创建了一种可靠数据传输服务(reliable data transfer service)。TCP的可靠数据传输服务确保一个进程从其接收缓存中读出的数据流是无损坏、无间隙、非冗余和按序的数据流；即该字节流与连接的另一方端系统发送出的字节流是完全相同。
+
+    我们将以两个递增的步骤来讨论TCP是如何提供可靠数据传输的。我们先给出一个TCP发送方的高度简化的描述，该发送方只用超时来恢复报文段的丢失；然后再给岀一个更全面的描述，该描述中除了使用超时机制外，还使用冗余确认技术。在接下来的讨论中，我们假定数据仅向一个方向发送，即从主机A到主机B,且主机A在发送一个大文件。
+
+\begin{lstlisting}[language=C++, caption={简化的TCP发送方}]
+/*
+* 假设发送方不受TCP流量和拥塞控制的限制，来自上层数据的长度小于MSS,且数据传送只在一个
+* 方向进行。
+*/
+NextSeqNum=InitialSeqNumber
+SendBase=InitialSeqNumber
+
+loop (永远) {
+    switch （事件）
+        事件:从上面应用程序接收到数据e
+            生成具有序号NextSeqNum的TCP报文段
+            if （定时器当前没有运行）
+                启动定时器 
+            向IP传递报文段
+            NextSeqNum = NextSeqNum + length(data)
+            break;
+        事件：定时器超时
+            重传具有最小序号但仍未应答的报文段
+            启动定时器
+            break;
+        事件：收到ACK,具有ACK字段值y
+            if (y > SendBase) {
+                SendBase = y
+                if (当前仍无任何应答报文段) {
+                    启动定时器 
+                }
+            }
+            break;
+} /*结束永远循环*/
+\end{lstlisting}
+
+    我们看到在TCP发送方有3个与发送和重传有关的主要事件：从上层应用程序接收数据；定时器超时和收到ACK。
+
+    一旦第一个主要事件发生，TCP从应用程序接收数据，将数据封装在一个报文段中，并把该报文段交给IP。
+
+    还要注意到如果定时器还没有为某些其他报文段而运行，则当报文段被传给IP时，TCP就启动该定时器。(将定时器想象为与最早的未被确认的报文段相关联是有帮助的)。该定时器的过期间隔是Timeoutinterval\footnote[1]{由EstimatedRTT和DevRTT计算得出}
+
+    第二个主要事件是超时。TCP通过重传引起超时的报文段来响应超时事件。然后TCP重启定时器。
+
+    TCP发送方必须处理的第三个主要事件是，到达一个来自接收方的确认报文段(ACK)(更确切地说，是一个包含了有效ACK字段值的报文段)
+
+\subsubsection{超时间隔加倍}
+
+    在大多数TCP实现中所做的一些修改。首先关注的是在定时器时限过期后超时间隔的长度。在这种修改中，每当超时事件发生时，如前所述，TCP重传具有最小序号的还未被确认的报文段。只是每次TCP重传时都会将下一次的超时间隔设为先前值的两倍，而不是用从EstimatedRTT和DevRTT推算出的值
+
+\subsubsection{快速重传}
+
+    超时触发重传存在的问题之一是超时周期可能相对较长。当一个报文段丢失时,这种长超时周期迫使发送方延迟重传丢失的分组，因而增加了端到端时延。
+
+    \emph{发送方通常可在超时事件发生之前通过注意所谓冗余ACK来较好地检测到丢包情况。冗余ACK(duplicate ACK)就是再次确认某个报文段的ACK,而发送方先前已经收到对该报文段的确认}。
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/chapter03/产生TCP ACK的建议.png}
+    \caption{产生TCP ACK的建议 [RFC 5681]}
+\end{figure}
+
+    因为发送方经常一个接一个地发送大量的报文段，如果一个报文段丢失，就很可能引起许多一个接一个的冗余ACK。如果TCP发送方接收到对相同数据的3个冗余ACK,它把这当作一种指示，说明跟在这个已被确认过3次的报文段之后的报文段已经丢失。
+
+    一旦收到3个冗余ACK, TCP就执行快速重传(fast retransmit)[ RFC 5681 ],即在该报文段的定时器过期之前重传丢失的报文段。对于采用快速重传的TCP,可用下列代码片段代替ACK收到事件： 
+
+\begin{lstlisting}[language=C++, caption={针对快速重传的机制}]
+事件：收到ACK,具有ACK字段值y
+    if (y > SendBase) {
+        SendBase=y
+        if (当前仍无任何应答报文段)
+            启动定时器
+        }
+    else {/* 快对已经确认的报文段的一个冗余ACK */
+        对y收到的冗余ACK数加1
+        if (对y == 3收到的冗余ACK数)
+            /* TCP快速重传 */ 
+            重新发送具有序号y的报文段
+    }
+    break;
+\end{lstlisting}
+
+\subsection{流量控制}
+
+    \emph{一条TCP连接的每一侧主机都为该连接设置了接收缓存。当该TCP连接收到正确、按序的字节后，它就将数据放入接收缓存。相关联的应用进程会从该缓存中读取数据，但不必是数据刚一到达就立即读取}。
+
+    TCP为它的应用程序提供了流量控制服务(flow control service)以消除发送方使接收方缓存溢岀的可能性。流量控制因此是一个速度匹配服务，即发送方的发送速率与接收方应用程序的读取速率相匹配。
+
+    TCP发送方也可能因为IP网络的拥塞而被遏制；这种形式的发送方的控制被称为拥塞控制(congestion control)。
+
+    值得注意的是：\emph{使流量控制和拥塞控制采取的动作非常相似(对发送方的遏制)，但是它们显然是针对完全不同的原因而采取的措施。}
+
+    TCP通过让发送方维护一个称为接收窗口(receive window)的变量来提供流量控制。通俗地说，接收窗口用于给发送方一个指示一一该接收方还有多少可用的缓存空间。\emph{因为TCP是全双工通信，在连接两端的发送方都各自维护一个接收窗口。}
+
+    我们定义以下变量：
+
+\begin{itemize}
+    \item RcvBuffer：来表示接收缓存大小
+    \item LastByteRead:主机B上的应用进程从缓存读出的数据流的最后一个字节的编号
+    \item LastByteRcvd:从网络中到达的并且已放入主机B接收缓存中的数据流的最后一个字节的编号
+\end{itemize}
+
+    由于TCP不允许已分配的缓存溢岀，下式必须成立:
+
+$$
+    LastByteRcvd - LastByteRead = RcvBuffer
+$$
+
+    接收窗口用rwnd表示，根据缓存可用空间的数量来设置:
+
+$$
+    rwnd = RcvBuffer - [LastByteRcvd - LastByteRead]
+$$
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/chapter03/接收窗口和接收缓存.png}
+    \caption{接收窗口和接收缓存}
+\end{figure}
+
+\subsection{TCP链接管理}
+
+    TCP链接：
+
+\begin{itemize}
+    \item [1)] 客户端向服务器发送特殊TCP报文(也就是SYN报文段)，此时SYN报文段被置1。然后随机选择初始序号$(client\_isn)$
+    \item [2)] 当SYN报文段的IP数据包到达服务器主机，则提取出SYN，服务器端发送允许链接的报文段\footnote[1]{\emph{允许链接的报文段被称为SYNACK报文段(SYNACK segment)}}(此时，SYN同样包含，确认号字段为$client\_isn + 1$，最后服务器选择自己的初始序号$(server\_isn)$)
+    \item [3)] 在收到SYNACK报文段后，客户给该链接分配缓存和变量。同时，向服务器发送链接确认的报文(SYN置0)
+\end{itemize}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/chapter03/TCP三次握手，报文段交换.png}
+    \caption{TCP三次握手：报文段交换}
+\end{figure}
+
+    当客户端发送关闭连接命令：
+
+\begin{itemize}
+    \item [1)] 客户端发送特殊TCP报文段(也就是FIN报文段)
+    \item [2)] 服务器接收到FIN后，发送确认ACK报文段
+    \item [3)] 服务器发送FIN终止报文段
+    \item [4)] 客户端发送ACK确认报文段
+\end{itemize}
+
+    在一个TCP连接的生命周期内，运行在每台主机中的TCP协议在各种TCP状态(TCP state)之间变迁。
+
+\begin{figure}[htbp]
+    \begin{minipage}[t]{0.5\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{image/chapter03/TCP关闭连接.png}
+        \caption{TCP关闭连接}
+    \end{minipage}
+    
+    \begin{minipage}[t]{0.5\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{image/chapter03/TCP关闭状态.png}
+        \caption{客户TCP经历的典型TCP状态序列}
+    \end{minipage}    
+\end{figure}
+
+% \begin{figure}[!htbp]
+    
+% \end{figure}
+
+    客户TCP开始时处于CLOSED(关闭)状态。客户的应用程序发起一个新的TCP连接。这引起客户中的TCP向服务器中的TCP发送一个SYN报文段。在发送过SYN报文段后，客户TCP进入了$SYN\_SENT$状态。
+
+    当客户TCP处在$SYN\_SENT$状态时，它等待来自服务器TCP的对客户所发报文段进行确认且SYN比特被置为1的一个报文段。收到这样一个报文段之后，客户TCP进入ESTABLISHED(已建立)状态。
+
+    当处在ESTABLISHED状态时，TCP客户就能发送和接收包含有效载荷数据(即应用层产生的数据)的TCP报文段了。
+
+    假设客户应用程序决定要关闭该连接。这引起客户TCP发送一个带有FIN比特被置为1的TCP报文段，并进入$FIN\_WAIT\_1$状态。
+
+    当处在$FIN\_WAIT\_1$状态时，客户TCP等待一个来自服务器的带有确认的TCP报文段。当它收到该报文段时，客户TCP进入$FIN\_WAIT\_2$状态。
+
+    当处在$FIN\_WAIT\_2$状态时，客户等待来自服务器的FIN比特被置为1的另一个报文段；当收到该报文段后，客户TCP对服务器的报文段进行确认，并进入$TIME\_WAIT$状态。
+
+    假定ACK丢失，$TIME\_WAIT$状态使TCP客户重传最后的确认报文。在$TIME\_WAIT$状态中所消耗的时间是与具体实现有关的，而典型的值是30秒、1分钟或2分钟。经过等待后，连接就正式关闭，客户端所有资源(包括端口号)将被释放。
+
+    对于服务器TCP需要经历的流程：
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/chapter03/服务器TCP状态序列.png}
+    \caption{服务器端TCP经历的典型TCP状态序列}
+\end{figure}
+
+\section{拥塞控制原理}
+
     
