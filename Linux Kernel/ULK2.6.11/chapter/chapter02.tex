@@ -364,3 +364,363 @@ struct user_desc {
     \item Global标志
     \subitem 只用于页表项。用来防止页从TLB高速缓存中刷新出去。只有cr4寄存器在页全局启用(Page Global Enable, PGE)标志置位时才有效
 \end{itemize}
+
+\subsection{扩展分页}
+
+    80x86引入了扩展分页(extended paging)，允许页框大小为4MB而不是4KB。\emph{扩展分页用于把大段连续的线性地址转换成相应的物理地址(内核可以不用中间页表进行地址转换，从而节省内存并保存TLB项)}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{image/chapter02/扩展分页.png}
+    \caption{扩展分页}
+\end{figure}
+
+    通过设置Page Size字段启用扩展分页：
+
+\begin{itemize}
+    \item Directory
+    \subitem 最高10位
+    \item Offset
+    \subitem 最高22位
+    \item 扩展分页与正常分页页目录项基本相同，除了
+    \subitem Page Size必须被设置
+    \subitem 20位物理地址字段只有最高10位是有意义的
+\end{itemize}
+
+\subsection{硬件保护方案}
+
+    页与页表的特权级只有两个，由User/Supervisor标志控制。页的存储权限只有两种，若Read/Write标志为0，说明是只读的，否则是可读可写的。
+
+\subsection{物理地址扩展(PAE)分页机制}
+
+    \emph{处理器所支持的RAM容量受连接到地址总线上的地址管脚数限制。}
+
+    Intel引入物理地址扩展(Physical Address Extension，PAE)机制，另外一种叫做页大小扩展机制在Pentium中引入。
+
+    通过设置cr4控制寄存器中的物理地址扩展PAE标志激活PAE，为了支持PAE，因此分页机制需要更改：
+
+\begin{itemize}
+    \item 64GB的RAM分为$2^{24}$个页框，页表项物理地址字段扩展到24位。
+    \item 引入页目录指针表(Page Directory Pointer Table， PDPT)的页表新级别，由四个64位表项组成
+    \item cr3控制寄存器包含一个27位的页目录指针表(PDPT)基地址字段。
+    \item 把线性地址映射到4KB的页时，32位线性地址按下列方式解释：
+    \subitem cr3：指向一个PDPT
+    \subitem 位31 - 30：指向PDPT中4个项中的一个
+    \subitem 位29 - 21：指向页目录中512个项的一个
+    \subitem 位20 - 12：指向页表中512项中的一个
+    \subitem 位11 - 0：4KB页中的偏移量
+    \item 把线性地址映射到2MB的页时，32位线性地址按下列方式解释：
+    \subitem cr3：指向一个PDPT
+    \subitem 位31 - 30：指向PDPT中4个项中的一个
+    \subitem 位29 - 21：指向页目录中512个项的一个
+    \subitem 位20 - 0：2MB页中的偏移量
+\end{itemize}
+
+\subsection{硬件高速缓存}
+
+    \emph{为了缩小CPU与RAM之间的速度不匹配，引入了硬件高速缓存内存(hardware cache memory)}。
+
+    \emph{硬件高速缓存基于局部性原理\footnote[1]{\emph{
+        1. 时间局部性（Temporal Locality）：指在程序执行过程中，刚刚访问过的数据或指令很可能在不久的将来再次被访问。这是因为程序中的循环、迭代和函数调用等结构会导致对同一数据或指令的重复访问。通过利用时间局部性，计算机系统可以将频繁访问的数据或指令缓存到高速缓存（Cache）中，以提高访问速度。\\
+        2. 空间局部性（Spatial Locality）：指在程序执行过程中，与当前访问的数据或指令在空间上相邻的数据或指令很可能在不久的将来被访问。这是因为程序中的数组、结构体和代码块等通常具有连续的存储结构。通过利用空间局部性，计算机系统可以预取和预加载与当前访问的数据或指令相邻的数据或指令，以提高内存访问效率。}
+    }(locality principle)},这说明程序的循环结构及相关数组可以组成线性数组，最近最常用的相邻地址在最近的将来可能又会用到。
+
+    为了适应这种机制，80x86引入了行的新单位。\emph{行由几十个连续字节组成，以脉冲突发模式\footnote[2]{\emph{脉冲突发模式是指在通信系统中，用于携载业务和控制信道的信息的一种模式。}}(burst mode)在慢速DRAM和快速SRAM之间传送，实现高速缓存。}
+
+    在极端情况下，高速缓存可以直接映射，此时主存中的一个行总是放在高速缓存中完全相同的位置。另一种情况，高速缓存时全相联的(fully associative)，意味着主存中任意一个行可以存放在高速缓存中的任意位置。大多数高速缓存时N-路组关联的(N-way set associative)，意味着任意一个行能够放在N行中的任意一行
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/chapter02/高速缓存器.png}
+    \caption{高速缓存器}
+\end{figure}    
+
+    高速缓存单元插在分页单元和主存之间。包含一个高速缓存内存和高速缓存控制器。高速缓存内存存放内存中真正的行，控制器存放一个表项数组，每个表项对应高速缓存内存中的行。
+
+    每个表项都有一个标签(tag)和描述高速缓存行状态的标志(flag)。
+
+    访问RAM时，CPU从物理地址中提取子集的索引号并把子集种所有行的标签与物理地址的高几位相比较，若相同，则称缓存命中(cache hit)，否则缓存未命中(cache miss)。
+
+    当命中时，高速缓存控制器根据存取类型采取不同的操作。
+
+\begin{itemize}
+    \item 读操作
+    \subitem \emph{控制器从行种选择数据并送往CPU，不需要访问RAM}
+    \item 写操作
+    \subitem 控制器有两种方案：通写(write-through)和回写(write-back)
+    \subitem \emph{通写中，控制器既写RAM也写高速缓存行}
+    \subitem \emph{回写中，控制器只更新高速缓存行，不更改RAM，但回写结束后，RAM必须被更新}
+\end{itemize}
+
+    当缓存为命中，高速缓存行被写回RAM中，且有必要的情况下，将正确的行写入高速缓存表项中
+
+    在多处理器中，每一个处理器都有自己的硬件高速缓存，因此需要额外电路来保持缓存内容的同步。
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/chapter02/双处理器中的高速缓存.png}
+    \caption{双处理器中的高速缓存}
+\end{figure}
+
+    \emph{高速缓存监听(cache snooping)用于检查CPU是否需要更新，当然这些属于硬件级，内核并不需要关心。}
+
+    处理器上的cr0寄存器的CD标志位用来启用或禁用高速缓存电路，该寄存器的NW标志指明高速缓存是使用通写还是回写。
+
+\subsection{转换后援缓冲器(TLB)}
+
+    80x86中包含了一个TLB(Translation Lookaside Buffer)的高速缓存用于加快线性地址的转换。
+
+    当一个线性地址第一次使用时，通过慢速访问RAM的页表计算出对应的物理地址，同时该物理地址会被存放在TLB表项(entry)以便同一个线性地址可以快速转换。
+
+    注意：\emph{当cr3寄存器更改后，硬件自动使本地TLB中的所有项都无效，因为此时TLB是旧数据。}
+
+\section{Linux中的分页}
+
+    Linux为了能够同时适用于32位和64位系统的普通分页模型，因此采用了三级分页模型，但是从2.6.11版本开始，采用四级分页模型：
+
+\begin{itemize}
+    \item 页全局目录(Page Global Directory)
+    \item 页上级目录(Page Upper Directory)
+    \item 页中间目录(Page Middle Directory)
+    \item 页表(Page Table)
+\end{itemize}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{image/chapter02/Linux的分页模式.png}
+    \caption{Linux的分页模式}
+\end{figure}
+
+    对于没有启用物理地址扩展的32位系统，两级页表已经足够，Linux使页上级目录和页中间目录为0，从而取消该字段。启用了物理地址扩展的32位系统采用了三级页表，页全局目录对应页目录指针表，取消了页上级目录。
+
+    \emph{Linux的进程处理很大程度上依赖于分页，线性地址到物理地址的自动转换使得下面的设计目标变得可行：}
+
+\begin{itemize}
+    \item 给每个进程分配一块不同的物理地址空间
+    \item 区别页和页框的不同，这使得存放在某个页框中的一个页，可以保存在磁盘上，然后重新装入不同页框内(虚拟机内存机制的基本要素)
+\end{itemize}
+
+\subsection{线性地址字段}
+
+    下列宏简化了页表处理(全在include/asm-x86\_64/pgtable.h中)
+
+\begin{itemize}
+    \item PAGE\_SHIFT
+    \subitem 指定Offset字段的位数。当使用80x86处理器时，默认的指为12。
+    \subitem 该宏由PAGE\_SIZE使用以返回页大小，最后由PAGE\_MASK产生的指0xfffff000，来屏蔽Offset字段
+    \item PMD\_SHIFT
+    \subitem 指定线性地址的Offset字段和Table字段的总位数。
+    \subitem PMD\_SIZE用于计算由页中间目录的一个单独表项所映射的区域大小，PMD\_MASK用于屏蔽Offset和Table字段的所有位
+    \subitem 当PAE被禁用时，PMD\_SHIFT的指为22(Offset的12位 + Table的10位)；PMD\_SIZE的值为$2^{22}$，PMD\_MASK的值为0fffc00000
+    \subitem 当PAE被激活时，PMD\_SHIFT的指为21(Offset的12位 + Table的9位)；PMD\_SIZE的值为$2^{21}$，PMD\_MASK的值为0fffe00000
+    \item PUD\_SHIFT
+    \subitem 确定页上级目录项能映射的区域大小的对数
+    \subitem PUD\_SIZE用于计算页全局目录中的一个单独表项所能映射的区域，PUD\_MASK用于频闭Offset字段、Table、Middle Air字段和Upper Air字段
+    \item PGDIR\_SHIFT
+    \subitem 去欸的那个页全局目录能映射的大小的对数
+    \subitem PGDIR\_SIZE用于计算页全局目录中一个单独的表项所能映射的区域，PGDIR\_MASK用于用于频闭Offset字段、Table、Middle Air字段和Upper Air字段
+\end{itemize}
+
+\subsection{页表处理}
+
+    pte\_t、pmd\_t、pud\_t和pgd\_t分别描述页表项、页中间目录项、页上级目录项和页全局目录项的格式。\emph{当PAE被激活时，都是64位的数据类型，否则为32位数据类型}
+
+    pgprot\_t是另一个64位(32位)的数据类型，表示与一个单独表项相关的保护标志
+
+    五种类型转换红(\_\_pte, \_\_pmd, \_\_pud, \_\_pgd和\_\_pgrot)把一个无符号整数转换为所需的类型，另外五种类型转换宏(pte\_val, pmd\_val, pud\_val, pgd\_val和pgrot\_val)执行相反的转换。
+
+\begin{lstlisting}[language=C++]
+// 如果对应表项为0，则返回值为1
+#define pte_none(x)	(!pte_val(x))
+#define pmd_none(x)	(!pmd_val(x))
+#define pud_none(x)	(!pud_val(x))
+#define pgd_none(x)	(!pgd_val(x))
+
+// 原子的写入指定值
+#define set_pte(pteptr, pteval) (*(pteptr) = pteval)
+#define set_pte_atomic(pteptr, pteval) set_pte(pteptr,pteval)
+
+// 若a和b指向同一页且指定相同访问优先级
+#define pte_same(a, b)		((a).pte == (b).pte)
+#define pte_same(a, b)		((a).pte_low == (b).pte_low)
+
+// 通过输入参数传递来检查页中间目录项，若指向一个不能使用的页表，宏值为1
+#define	pmd_bad(x)	\
+    ((pmd_val(x) & (~PTE_MASK & ~_PAGE_USER)) != _KERNPG_TABLE )
+\end{lstlisting}
+
+\begin{lstlisting}[language=C++, caption={读页标志的函数}]
+static inline int pte_user(pte_t pte)   // 读User/Supervisor标志
+    { return pte_val(pte) & _PAGE_USER; }
+extern inline int pte_read(pte_t pte)   // 读User/Supervisor标志
+    { return pte_val(pte) & _PAGE_USER; }
+extern inline int pte_exec(pte_t pte)   // 读User/Supervisor标志
+    { return pte_val(pte) & _PAGE_USER; }
+extern inline int pte_dirty(pte_t pte)  // 读Dirty标志
+    { return pte_val(pte) & _PAGE_DIRTY; }
+extern inline int pte_young(pte_t pte)  // 读Accessed标志
+    { return pte_val(pte) & _PAGE_ACCESSED; }
+extern inline int pte_write(pte_t pte)	// 读Read/Write标志
+    { return pte_val(pte) & _PAGE_RW; }
+static inline int pte_file(pte_t pte)   // 读Dirty标志
+    { return pte_val(pte) & _PAGE_FILE; }
+\end{lstlisting}
+
+\begin{lstlisting}[language=C++, caption={设置页标志的函数}]
+extern inline pte_t pte_mkread(pte_t pte)       // 设置U/S标志
+extern inline pte_t pte_mkexec(pte_t pte)       // 设置U/S标志
+extern inline pte_t pte_rdprotect(pte_t pte)    // 清除U/S标志
+extern inline pte_t pte_exprotect(pte_t pte)	// 清除U/S标志
+
+extern inline pte_t pte_mkold(pte_t pte)        // 清除Accessed标志
+extern inline pte_t pte_mkyoung(pte_t pte)      // 设置Accessed标志
+
+extern inline pte_t pte_wrprotect(pte_t pte)    // 清除R/W标志
+extern inline pte_t pte_mkwrite(pte_t pte)      // 设置R/W标志
+
+extern inline pte_t pte_mkdirty(pte_t pte)      // 设置Dirty标志
+extern inline pte_t pte_mkclean(pte_t pte)      // 清除Dirty标志
+
+// 与pte_mkclean类似，但作用于指向页表项的指针，并返回旧值
+static inline int ptep_test_and_clear_dirty(pte_t *ptep)
+// 与pte_mkold类似，但作用于指向页表项的指针，并返回旧值
+static inline int ptep_test_and_clear_young(pte_t *ptep)
+// 与pte_wrprotect类似，但作用于指向页表项的指针
+static inline void ptep_set_wrprotect(pte_t *ptep)
+// 与pte_mkdirty类似，但作用于指向页表项的指针
+static inline void ptep_mkdirty(pte_t *ptep)
+
+// 将页表项p访问权限设置为指定值v
+extern inline pte_t pte_modify(pte_t pte, pgprot_t newprot)
+
+// 设置页表项中的Page Size和Present
+#define mk_pte_huge(entry) \
+    (pte_val(entry) |= _PAGE_PRESENT | _PAGE_PSE)
+\end{lstlisting}
+    
+\begin{lstlisting}[language=C++, caption={对页表项操作的宏}]
+暂时略过
+\end{lstlisting}
+
+\subsection{物理内存布局}
+
+    \emph{在初始化阶段，内核必须建立在一个物理地址映射来指定哪些物理地址范围对内核可用}。
+
+    内核将下列页框记为保留：
+
+\begin{itemize}
+    \item 在不可用的物理地址范围内的页框
+    \item 含有内核代码和已初始化的数据结构的页框
+\end{itemize}
+
+    \emph{保留的页框中的页绝不能被动态分配或交换到磁盘上。}
+
+    Linux通常从0x00100000开始的地方启动，因为在之前的RAM需要留给：
+
+\begin{itemize}
+    \item 页框0由BIOS使用，存放加电自检(Power-On Self-Test，POST)期间检查到的系统硬件配置
+    \item 物理地址从0x000a0000到0x000fffff的范围通常留给BIOS例程，并且映射ISA图形卡的内部内存。
+    \item 第一个MB内的其他页框可能由特定计算机模型保留
+\end{itemize}
+
+    在启动过程早期，内核询问BIOS并了解物理内存大小，随后内核执行machie\_specific\_-memory\_setup()函数，建立物理地址映射
+
+\begin{table*}[!htbp]
+    \begin{center}
+        \caption{BIOS提供的物理地址映射举例}
+        \begin{tabular}{c c c}
+            \hline
+            开始 & 结束 & 类型 \\
+            0x00000000 & 0x0009ffff & Usable \\
+            0x000f0000 & 0x000fffff & Reserved \\
+            0x00100000 & 0x07feffff & Usable \\
+            0x07ff0000 & 0x07ff2ffff & ACPI data \\
+            0x07ff3000 & 0x07fffffff & ACPI NVS \\
+            0xffff0000 & 0xfffffffff & Reserved \\
+        \end{tabular}
+    \end{center}
+\end{table*}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.6\textwidth]{image/chapter02/内核物理内存布局的变量.png}
+    \caption{描述内核物理内存布局的变量}
+\end{figure}
+
+    为了避免把内核装入一组不连续的页框内，Linux更愿意跳过RAM中的第一个MB
+
+\subsection{进程页表}
+
+    进程的线性地址空间被分为两部分：
+
+\begin{itemize}
+    \item 从0x0到0xbfffffff的线性地址，无论进程运行在用户态还是内核态都可以寻址
+    \item 从0xc00000000到0xffffffff的线性地址，只有内核态的进程能够寻址
+\end{itemize}
+
+\subsection{内核页表}
+
+    内核维持着一组自己使用的页表，驻留在主内核页全局目录中。
+
+    内核初始化自身的页表分为两个阶段：
+
+\begin{itemize}
+    \item 第一阶段创建一个有限的地址空间，包括内核的代码段和数据段、初试页表和用于存放动态数据结构的共128KB大小的空间
+    \item 第二阶段利用剩余的RAM并适当的建立分页表
+\end{itemize}
+
+\subsubsection{临时内核页表}
+
+    略
+
+\subsection{固定映射的线性地址}
+
+    固定映射的线性地址(fix-mapped linear address)基本上是一种类似于0xffffc000这样的常量线性地址，其对应的物理地址不必定于线性地址减去0xc000000。
+
+    每个固定映射的线性地址由enum fixed\_addresses数据结构中的整形索引来表示：
+
+\begin{lstlisting}[language=C++]
+enum fixed_addresses {
+    VSYSCALL_LAST_PAGE,
+    VSYSCALL_FIRST_PAGE = \
+        VSYSCALL_LAST_PAGE + \
+        ((VSYSCALL_END-VSYSCALL_START) >> PAGE_SHIFT) - 1,
+    VSYSCALL_HPET,
+    FIX_HPET_BASE,
+#ifdef CONFIG_X86_LOCAL_APIC
+    FIX_APIC_BASE,	/* local (CPU) APIC) -- required for SMP or not */
+#endif
+#ifdef CONFIG_X86_IO_APIC
+    FIX_IO_APIC_BASE_0,
+    FIX_IO_APIC_BASE_END = FIX_IO_APIC_BASE_0 + MAX_IO_APICS-1,
+#endif
+    __end_of_fixed_addresses
+};
+
+
+#define __fix_to_virt(x)	(FIXADDR_TOP - ((x) << PAGE_SHIFT))
+extern void __this_fixmap_does_not_exist(void);
+
+/*
+ * 'index to address' translation. If anyone tries to use the idx
+ * directly without translation, we catch the bug with a NULL-deference
+ * kernel oops. Illegal ranges of incoming indices are caught too.
+ */
+extern inline unsigned long fix_to_virt(const unsigned int idx)
+{
+	/*
+	 * this branch gets completely eliminated after inlining,
+	 * except when someone tries to use fixaddr indices in an
+	 * illegal way. (such as mixing up address types or using
+	 * out-of-range indices).
+	 *
+	 * If it doesn't get removed, the linker will complain
+	 * loudly with a reasonably clear error message..
+	 */
+	if (idx >= __end_of_fixed_addresses)
+		__this_fixmap_does_not_exist();
+
+    return __fix_to_virt(idx);
+}
+\end{lstlisting}
+
