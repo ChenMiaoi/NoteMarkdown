@@ -432,3 +432,346 @@ struct pid
     \item task\_t fastcall *next\_thread(const task\_t *p)
     \subitem 返回TGID类型中的散列表链接中task知识的下一个轻量级进程的进程描述符
 \end{itemize}
+
+\subsection{如何组织进程}
+
+    运行队列链表把处于TASK\_RUNNING状态的所有进程都组织再一起，但对于其他状态：
+
+\begin{itemize}
+    \item 没有为TASK\_STOPPED、EXIT\_ZOMBIE或EXIT\_DEAD状态的进程专门建立链表
+\end{itemize}
+
+\subsubsection{等待队列}    
+
+    \emph{等待队列再中断处理、进程同步和定时方面尤为重要。}
+
+    进程必须经常等待某些事件的发生，例如的带一个磁盘操作的弘治，的带释放系统资源，或等待时间经过固定的间隔。等待队列实现了在事件上的等待
+
+    \emph{希望等待特定的事件的进程将自己放入合适的等待队列，并放弃控制权，一旦某条件为真，由内核唤醒。} 
+
+    等待队列由双向列表实现，其元素包括指向进程描述符的指针
+
+\begin{lstlisting}[language=C++]
+struct __wait_queue_head {
+    spinlock_t lock;
+    struct list_head task_list;
+};
+typedef struct __wait_queue_head wait_queue_head_t;
+
+struct __wait_queue {
+	unsigned int flags;
+#define WQ_FLAG_EXCLUSIVE	0x01
+	struct task_struct * task;
+	wait_queue_func_t func;
+	struct list_head task_list;
+};
+typedef struct __wait_queue wait_queue_t;
+\end{lstlisting}
+
+    等待队列是由中断处理程序和主要内核函数修改而来，因此必须对该链表进程保护以免被同时访问，因此通过自旋锁来确保。
+
+    等待队列链表中的每个元素代表一个睡眠进程，该进程等待某一事件的发生。然而要唤醒等待队列中的所有睡眠进程有时并不方便，因此有两种睡眠进程。
+
+    互斥进程(等待队列元素的flags字段为1)由内核有选择地唤醒；而非互斥进程(flags值为0)总是由内核在事件发生时唤醒。
+
+\subsubsection{等待队列的操作}
+
+\begin{lstlisting}[language=C++]
+#define __WAITQUEUE_INITIALIZER(name, tsk) {				\
+.task		= tsk,						\
+.func		= default_wake_function,			\
+.task_list	= { NULL, NULL } }
+
+#define DECLARE_WAITQUEUE(name, tsk)					\
+	wait_queue_t name = __WAITQUEUE_INITIALIZER(name, tsk)
+\end{lstlisting}
+
+    可以用DECLEAR\_WAIT\_QUEUE\_HEAD宏定义一个新等待队列的头，其静态声明一个叫name的等待队列的头变量并对该变量的lock和task\_list字段进行初始化。
+
+    函数init\_waitqueue\_head()可以用来初始化动态分配的等待队列的头变量
+
+\begin{lstlisting}[language=C++]
+static inline void init_waitqueue_head(wait_queue_head_t *q)
+{
+    q->lock = SPIN_LOCK_UNLOCKED;
+    INIT_LIST_HEAD(&q->task_list);
+}
+\end{lstlisting}
+
+    非互斥进程将由default\_wake\_function()唤醒。
+
+    一旦定义了一个元素，必须将其插入等待队列，add\_wait\_queue()函数把一个非互斥进程插入等待队列链表的第一个位置。add\_wait\_queue\_exclusive()函数把一个互斥进程插入等待队列的最后一个位置。
+
+\begin{lstlisting}[language=C++]
+static inline void __add_wait_queue(
+    wait_queue_head_t *head, wait_queue_t *new)
+
+static inline void add_wait_queue_exclusive_locked(
+    wait_queue_head_t *q, wait_queue_t *wait)
+\end{lstlisting}
+
+    要等待特定条件的进程可以调用如下中的任何一个函数：
+
+\begin{itemize}
+    \item void fastcall \_\_sched sleep\_on(wait\_queue\_head\_t *q)
+    \subitem 该函数把当前进程状态设置为TASK\_UNINTERRUPTIBLE，并把其插入到特定的等待队列。然后调度程序重新开始另一个程序的执行
+    \subitem 当睡眠进程被唤醒，则调度程序重新执行sleep\_on()函数，并把该进程从队列中删除
+    \item \_\_sched interruptible\_sleep\_on\_timeout(wait\_queue\_head\_t *q, long timeout)
+    \subitem 和上一个函数类似，但该函数将状态设置为TASK\_INTERRUPTIBLE，因此接受一个信号就可以唤醒当前进程
+    \item long fastcall \_\_sched sleep\_on\_timeout(wait\_queue\_head\_t *q, long timeout)
+    \subitem 和上一个函数类似，但其允许定义一个时间间隔，过了该间隔，由内核唤醒，因此调用schedule\_timeout()函数
+    \item 在2.6kernel下引入了prepare\_to\_wait()、prepare\_to\_wait\_exclusive()和finish\_wait()，提供了另一种途径来使当前进程在一个等待队列中睡眠
+\end{itemize}
+
+\begin{lstlisting}[language=C++]
+void fastcall prepare_to_wait(
+    wait_queue_head_t *q, wait_queue_t *wait, int state)
+void fastcall prepare_to_wait_exclusive(
+    wait_queue_head_t *q, wait_queue_t *wait, int state)
+void fastcall finish_wait(wait_queue_head_t *q, wait_queue_t *wait)
+
+DEFINE_WAIT(wait);
+prepare_to_wait_exclusive(&wq, &wait, TASK_INTERRUPTIBLE);
+...
+if (!condition)
+    schedule();
+finish_wait(&wq, &wait);
+\end{lstlisting}
+
+    prepare\_to\_wait()和prepare\_to\_wait\_exclusive()中的第三个参数设置进程的状态，然后把等待队列元素的互斥标志flag设置为0或1，最后把等待元素wait插入到wq为头的等待队列的链表中。
+
+    wait\_event和wait\_event\_interruptible宏使它们的调用进程在等待队列上睡眠，一直到修改了给定条件为止
+
+\begin{lstlisting}[language=C++]    
+#define __wait_event(wq, condition) 					\
+do {									\
+	DEFINE_WAIT(__wait);						\
+									\
+	for (;;) {							\
+		prepare_to_wait(&wq, &__wait, TASK_UNINTERRUPTIBLE);	\
+		if (condition)						\
+			break;						\
+		schedule();						\
+	}								\
+	finish_wait(&wq, &__wait);					\
+} while (0)
+
+#define wait_event(wq, condition) 					\
+do {									\
+    if (condition)	 						\
+        break;							\
+    __wait_event(wq, condition);					\
+} while (0)
+\end{lstlisting}
+
+    值得注意的使：\emph{sleep\_on()类函数在以下条件下不能使用，那就是必须测试条件且该条件还没有得到验证时，又让进程去睡眠，这样是竞争条件产生的根源。}
+
+    内核可以通过下面任何一个宏唤醒等待队列中的进程并把其状态设置为RUNNING：wake\_up、wake\_up\_nr、wake\_up\_all、wake\_up\_interruptible、wake\_up\_interruptible\_nr、wake\_up\_interruptible\_all、wake\_up\_interruptible\_sync、wake\_up\_locked。
+
+\begin{itemize}
+    \item 所有宏都考虑到处于INTERRUPTIBLE状态的睡眠进程；若宏的名字中不含"interruptible"，那么处于UNINTERRUPTIBLE的进程也会被考虑到
+    \item 所有宏都具有唤醒请求状态的所有非互斥进程
+    \item 名字中含有"nr"字符串的宏唤醒给定数具有请求状态的互斥进程；"all"唤醒所有具有请求状态的互斥进程，都不含的唤醒一个互斥进程
+    \item 名字中不含"snyc"的宏检查被唤醒进程的优先级是否高于系统中正在运行的进程优先级，并在必要时调用schedule()
+    \item wake\_up\_locked需要自旋锁被持有
+\end{itemize}
+
+\begin{lstlisting}[language=C++]
+void fastcall __wake_up(wait_queue_head_t *q, unsigned int mode,
+    int nr_exclusive, void *key)
+{
+    unsigned long flags;
+
+    spin_lock_irqsave(&q->lock, flags);
+    __wake_up_common(q, mode, nr_exclusive, 0, key);
+    spin_unlock_irqrestore(&q->lock, flags);
+} 
+#define wake_up(x)			\
+    __wake_up(              \
+        x, TASK_UNINTERRUPTIBLE | TASK_INTERRUPTIBLE, 1, NULL)
+\end{lstlisting}
+
+\subsection{进程资源限制}
+
+    \emph{每一个进程都有一组相关的资源限制(resource limit)，限定了进程能使用的系统资源数论。}
+
+\begin{lstlisting}[language=C++]
+/* Allow arch to control resource order */
+#ifndef __ARCH_RLIMIT_ORDER
+#define RLIMIT_CPU		    0	/* CPU time in ms */
+#define RLIMIT_FSIZE		1	/* Maximum filesize */
+#define RLIMIT_DATA		    2	/* max data size */
+#define RLIMIT_STACK		3	/* max stack size */
+#define RLIMIT_CORE		    4	/* max core file size */
+#define RLIMIT_RSS		    5	/* max resident set size */
+#define RLIMIT_NPROC		6	/* max number of processes */
+#define RLIMIT_NOFILE		7	/* max number of open files */
+#define RLIMIT_MEMLOCK		8	/* max locked-in-memory address space */
+#define RLIMIT_AS		    9	/* address space limit */
+#define RLIMIT_LOCKS		10	/* maximum file locks held */
+#define RLIMIT_SIGPENDING	11	/* max number of pending signals */
+#define RLIMIT_MSGQUEUE		12	/* maximum bytes in POSIX mqueues */
+
+#define RLIM_NLIMITS		13
+#endif
+\end{lstlisting}
+
+    对当前进程的资源限制存放在current->signal->rlim字段中，即进程的信号描述符的一个字段，该字段是类型为rlimit结构的数组
+
+\begin{lstlisting}[language=C++]
+struct rlimit {
+    unsigned long	rlim_cur;
+    unsigned long	rlim_max;
+};
+\end{lstlisting}
+
+    rlim\_cur是当前资源限制，rlim\_max是资源限制所允许的最大值。
+
+    利用getrlimit()和setrlimit()系统调用，用户能够把一些资源的rlim\_cur限制增加。\emph{当然的，只有管理员权限才能使用。}
+
+\section{进程切换}
+
+    \emph{为了控制进程的执行，内核必须有能力挂起CPU上允许的进程，并恢复以前挂起某个进程的执行，这种行为被称为进程切换(process switch)、任务切换(task switch)或上下文切换()}
+
+\subsection{硬件上下文}
+
+    \emph{尽管每个进程都可以拥有自己的地址空间，但所有进程必须共享CPU寄存器。}
+
+    进程恢复执行前必须装入寄存器的一组数据被称为硬件上下文(hardware context)。硬件上下文是进程可执行上下文的一个子集，在Linux中，进程硬件的上下文的一部分存放在TSS段，剩余部分存放在内核态的堆栈中。
+
+    在下面的描述中，我们假定用prev表示切出的进程描述符，next表示切入的进程描述符：保存prev硬件上下文，用next硬件上下文代替prev。
+
+    在早期的Linux中，通过far jmp指令\footnote[1]{\emph{在x86中，该指令既能修改cs寄存器，又能修改eip寄存器，而简单的jmp指令只能修改eip寄存器。}}跳到next进程TSS描述符的选择符来执行进程切换：
+
+\begin{itemize}
+    \item 通过一组mov指令逐步执行切换(这样能够较好的控制装入数据的合法性)
+\end{itemize}
+
+    进程切换只发生在内核态，在执行进程切换之前，用户态进程使用的所有寄存器内部都已保存在内核堆栈上，也包括ss和esp这对寄存器的内容
+
+\subsubsection{任务状态段}
+
+    任务状态段(Task State Segment，TSS)用来存放硬件上下文。Linux并不使用硬件上下文切换，但强制为不同CPU创建一个TSS：
+
+\begin{itemize}
+    \item 当CPU从用户态切换到内核态时，可以从TSS获取内核态堆栈的地址
+    \item 当用户态进程试图通过in或out指令访问一个I/O端口时，CPU需要访问TSS中的I/O许可权位图(Permission Bitmap)以检查该进程是否拥有访问端口的权力
+    \subitem 检查eflags寄存器中的2位IOPL字段，如果该字段为3，控制单元就执行I/O指令，否则执行下一个检查
+    \subitem 访问tr寄存器以确定当前TSS和相应的I/O许可权位图
+    \subitem 检查I/O指令中指定的I/O端口在I/O许可权位图中对应的位
+\end{itemize}
+
+    tss\_struct结构描述了TSS的格式，每一个CPU都存放一个TSS(使用init\_tss数组描述)。
+
+    每个TSS都有自己的8字节的任务状态段描述符(Task State Segment Descriptor， TSSD)。该描述符包括指向TSS起始地址的32位Base字段，20位Limit字段和其他字段。
+
+\subsubsection{thread字段}
+
+    每次切换进程时，被替换进程的硬件上下文必须保存在别处，因此每个进程描述符中包含一个类型为thread\_struct的thread字段，只要进程被切换，内核就把硬件上下文保存在该结构中。
+
+\begin{lstlisting}[language=C++]
+struct thread_struct {
+    unsigned long	rsp0;
+    unsigned long	rsp;
+    unsigned long 	userrsp;	/* Copy from PDA */ 
+    unsigned long	fs;
+    unsigned long	gs;
+    unsigned short	es, ds, fsindex, gsindex;	
+/* Hardware debugging registers */
+    unsigned long	debugreg0;  
+    unsigned long	debugreg1;  
+    unsigned long	debugreg2;  
+    unsigned long	debugreg3;  
+    unsigned long	debugreg6;  
+    unsigned long	debugreg7;  
+/* fault info */
+    unsigned long	cr2, trap_no, error_code;
+/* floating point info */
+    union i387_union	i387  __attribute__((aligned(16)));
+/* IO permissions. the bitmap could be moved into the GDT, that would make
+    switch faster for a limited number of ioperm using tasks. -AK */
+    int		ioperm;
+    unsigned long	*io_bitmap_ptr;
+    unsigned io_bitmap_max;
+/* cached TLS descriptors. */
+    u64 tls_array[GDT_ENTRY_TLS_ENTRIES];
+} __attribute__((aligned(16)));
+\end{lstlisting}
+
+\subsection{执行进程切换}
+
+    进程切换可能只发生在：schedule()函数上。但是此处仅关注如何执行一个进程切换
+
+    从本质上说，每个进程切换由两步组成：
+
+\begin{itemize}
+    \item 切换页全局目录以安装一个新的地址空间
+    \item 切换内核太堆栈和硬件上下文
+\end{itemize}
+
+\subsubsection{switch\_to宏}
+
+\begin{lstlisting}[language=C++]
+#define switch_to(prev,next,last) do {					\
+unsigned long esi,edi;						\
+asm volatile("pushfl\n\t"					\
+        "pushl %%ebp\n\t"					\
+        "movl %%esp,%0\n\t"	/* save ESP */		\
+        "movl %5,%%esp\n\t"	/* restore ESP */	\
+        "movl $1f,%1\n\t"		/* save EIP */		\
+        "pushl %6\n\t"		/* restore EIP */	\
+        "jmp __switch_to\n"				\
+        "1:\t"						\
+        "popl %%ebp\n\t"					\
+        "popfl"						\
+        :"=m" (prev->thread.esp),"=m" (prev->thread.eip),	\
+        "=a" (last),"=S" (esi),"=D" (edi)			\
+        :"m" (next->thread.esp),"m" (next->thread.eip),	\
+        "2" (prev), "d" (next));				\
+} while (0)
+\end{lstlisting}
+
+    进程切换的第二步由switch\_to宏执行。
+
+    首先，该宏有三个参数，分别表示被替换进程，替换进程和表示把进程C的描述符地址写在了内存中的什么位置(方便重新引用)
+
+    \emph{也就是说，实际上进程切换涉及了三个进程(并非两个)。当schedule暂停进程A，激活B时，switch\_to宏使得A进程被冻结，如果内核想再次激活A，那么必须暂停另一个进程C(通常不同于B)，于是就需要暂停C，激活B。但目前next仍指向B的描述符，因此C的引用就被丢失了。}
+
+    \emph{那么，last参数就是一个输出参数，用于表示宏把进程C的描述符地址写在哪个地方了\footnote[1]{\emph{一般而言，B进程执行后，可能会执行其他进程，因此后面才会是C进程暂停，激活A进程。}}。}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{image/chapter03/通过对进程切换保存对进程C的引用.png}
+    \caption{通过对进程切换保存对进程C的引用}
+\end{figure}
+
+    由于switch\_to采用扩展内联汇编，因此可读性较差
+
+\begin{itemize}
+    \item [1)] 在eax和dx寄存器分别保存prev和next
+    \item [2)] 把eflags和ebp寄存器的内容保存在prev内核栈中，因为这些值在更换后不变
+    \item [3)] 把esp的内容保存在prev->thread.esp中以使得该字段指向prev内核栈的栈顶
+    \item [4)] 把next->thread.esp装入esp，此时内核开始在next的内核栈工作。因此，\emph{改变内核栈意味着改变当前进程。}
+    \item [5)] 把标记为1的地址存入prev->thread.eip。当被替换的进程重新恢复时，进程执行被标记为1的指令
+    \item [6)] 宏把next->thread.eip的值(绝大多数情况时被标记为1的地址)压入next的内核栈
+    \item [7)] 跳转到\_\_switch\_to()函数
+    \item [8)] 被进程B替换的进程A再次获得CPU：执行保存eflags和ebp寄存器的指令，这两条指令的第一条指令被标记为1
+    \item [9)] 拷贝eax寄存器的内容到switch\_to宏的第三个参数last标识的内存区域中\footnote[1]{\emph{eax寄存器指向刚被替换进程的描述符，当前指向的schedule函数重新使用了prev的局部变量：movl \%eax, prev}}
+\end{itemize}
+
+\begin{lstlisting}[language=C++, caption={对于switch\_to的过程描述}]
+movl prev, %eax
+movl next, %ebx
+pushfl
+pushl %ebp
+movl %esp, 484(%ebp)
+movl 484(%edx), %esp
+movl $1f, 480(%eax)
+pushl 480(%edx)
+jmp __switch_to
+
+1: 
+    popl %ebp
+    popfl
+movl %eax, last
+\end{lstlisting}
