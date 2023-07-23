@@ -775,3 +775,201 @@ jmp __switch_to
     popfl
 movl %eax, last
 \end{lstlisting}
+
+\subsubsection{\_\_switch\_to()函数}
+
+    \_\_switch\_to()函数执行大多数开始于switch\_to宏的进程切换，这个函数作用于prev\_p和next\_p参数，这两个参数标识前一个进程和新进程。为了强迫函数从寄存器中获取参数，内核利用\_\_attribute\_\_和regpram关键字，由gcc编译程序实现
+
+\begin{lstlisting}[language=C++]
+struct task_struct fastcall * __switch_to(
+    struct task_struct *prev_p, struct task_struct *next_p)
+\end{lstlisting}
+
+    函数的执行步骤如下：
+
+\begin{itemize}
+    \item 执行由\_\_unlazy\_fpu()宏产生的代码，以有选择地保存prev\_p进程的FPU、MMX和XMM寄存器的内容
+    \item 执行smp\_processor\_id()宏获得本地(local)CPU的下标，即执行代码的CPU。
+    \item 把next\_p->thread.esp0装入对应于本地CPU的TSS的esp0字段
+    \item 把next\_p进程使用的线程局部存储(TLS)段装入本地CPU的全局描述符，三个段选择描述符保存在进程描述符内的tls\_array数组中
+    \item 把fs和gs段寄存器的内容分别存放在prev\_p->thread.fs和prev\_p->thread.gs中
+    \item 用next\_p->thread.debugreg数组的内容装在dr0,...,dr7中的6个调试寄存器
+    \item 如果有必要，更新TSS中的I/O位图。\emph{等next\_p或prev\_p有其自己的定制I/O权限位图时必须这么做}
+    \item 终止\_\_switch\_to通过使用返回语句
+\end{itemize}
+
+\subsection{保存和加载FPU、MMX及XMM寄存器}
+
+    算术浮点单元(floating-point unit，FPU)被继承到CPU中。MMX用于加速多媒体应用程序的执行，其指令作用于FPU。
+
+    80x86微处理器并不在TSS中自动保存FPU、MMX和XMM寄存器，而是通过硬件支持由cr0寄存器中的一个TS(Task Switching)标志组成，遵循：
+
+\begin{itemize}
+    \item 每当执行硬件上下文切换时，设置TS标志
+    \item 每当TS标志被设置时，执行ESCAPE、MMX、SSE或SSE2指令，控制单元就产生一个"Device not available"异常
+\end{itemize}
+
+    TS标志使得内核只有在真正需要时才保存和恢复FPU、MMX、XMM寄存器。其被描述的数据结构在进程描述符中的thread.i387子字段中：
+
+\begin{lstlisting}[language=C++]
+union i387_union {
+    struct i387_fsave_struct	fsave;
+    struct i387_fxsave_struct	fxsave;
+    struct i387_soft_struct soft;
+};
+\end{lstlisting}
+
+    可以看见，该结构允许选择其中一种结构使用：i387\_soft\_struct由无数学协处理器的CPU模型使用，Linux内核通过软件模拟协处理器来支持这些老式芯片。i387\_fsave\_struct支持协处理器，而最后一种则是支持SSE和SSE2扩展的CPU模型。
+
+    进程描述符包含两个附加的标志：
+
+\begin{itemize}
+    \item 包含在thread\_info中的TS\_USEDFPU标志，用于标识当前执行过程中是否使用FPU、MMX和XMM寄存器
+    \item 包含在task\_struct中的flags字段中的PF\_USED\_MATH标志。该标志标识thread.i387字段是否有意义
+    \subitem 当进程调用execve()时，thread.i387不再有意义
+    \subitem 当在用户态执行一个进程执行一个信号处理程序时，不再有意义
+\end{itemize}
+
+\subsubsection{保存FPU处理器}
+
+    可以看见，\_\_unlazy\_fpu宏检查prev中的标志位，如果TS\_USEDFPU标志被设置，就说明prev在本次执行中使用了FPU、MMX、SSE或SSE2指令，因此内核需要保存其上下文
+
+\begin{lstlisting}[language=C++]
+#define __unlazy_fpu( tsk ) do { \
+	if ((tsk)->thread_info->status & TS_USEDFPU) \
+		save_init_fpu( tsk ); \
+} while (0)
+\end{lstlisting}
+
+\begin{itemize}
+    \item 把FPU中的内容转储到prev进程描述符中，然后重新初始化FPU。
+    \item 重置prev的TS\_USEDFPU标志
+    \item 使用stts()宏设置cr0的TS标志
+\end{itemize}
+
+\begin{lstlisting}[language=C++]
+static inline void __save_init_fpu( struct task_struct *tsk )
+{
+    if ( cpu_has_fxsr ) {
+        asm volatile( "fxsave %0 ; fnclex"
+                    : "=m" (tsk->thread.i387.fxsave) );
+    } else {
+        asm volatile( "fnsave %0 ; fwait"
+                    : "=m" (tsk->thread.i387.fsave) );
+    }
+    tsk->thread_info->status &= ~TS_USEDFPU;
+}
+\end{lstlisting}
+
+\subsubsection{装载FPU寄存器}
+
+    当next进程刚恢复执行时，浮点寄存器的内容还没有被恢复，因为cr0中的TS标志已被设置，因此next进程第一次试图执行ESCAPE、MMX或SSE/SSE2指令时，控制单元产生"Device not available"异常，内核(异常处理程序)运行math\_state\_restore()函数
+
+\begin{lstlisting}[language=C++]
+asmlinkage void math_state_restore(struct pt_regs regs)
+{
+    struct thread_info *thread = current_thread_info();
+    struct task_struct *tsk = thread->task;
+
+    clts();		/* Allow maths ops (or we recurse) */
+    if (!tsk_used_math(tsk))
+        init_fpu(tsk);
+    restore_fpu(tsk);
+    thread->status |= TS_USEDFPU; /* So we fnsave on switch_to() */
+}
+\end{lstlisting}
+
+    该函数清除cr0中的TS标志，且如果thread.i387字段无效，则调用init\_fpu()重新设置该字段，并将PF\_USED\_MATH标志设置为1.
+
+\subsubsection{在内核态使用FPU、MMX和SSE/SSE2单元}
+
+    在内核态使用时，需要注意：
+
+\begin{itemize}
+    \item 在使用协处理器之前，如果用户态使用了FPU，内核必须调用kernel\_fpu\_begin()，保存fpu并重置TS标志
+    \item 使用完成后，必须使用kernel\_end\_fpu设置TS标志
+\end{itemize}
+
+\section{创建进程}
+
+    Unix系统依赖进程创建来满足用户的需求。
+
+    \emph{传统Unix通过统一的方式对待所有进程：子进程复制父进程所有资源。}
+
+    现代Uni引入三种不同的机制解决该问题：
+
+\begin{itemize}
+    \item 写时复制技术允许父子进程读相同的物理页。只要二者中有一个试图写一个物理页，内核就把该页的内容拷贝到新页，并分配给正在写的进程
+    \item 轻量级进程允许父子进程共享每个进程在内核的数据结构
+    \item vfork()创建的进程能共享其父进程的内存地址空间
+\end{itemize}
+
+\subsection{clone、fork、vfork系统调用}
+
+    \emph{Linux系统中，轻量级进程由clone()系统调用创建的}：
+
+\begin{itemize}
+    \item fn
+    \subitem 指定一个由新进程执行的函数
+    \item arg
+    \subitem 指向传递fn函数的参数
+    \item flags
+    \subitem clone flags信息
+    \item child\_stack
+    \subitem 把用户态堆栈指针赋值给子进程的esp寄存器，调用进程应该总是为子进程分配新的堆栈
+    \item tls
+    \subitem 表示线程局部存储段(TLS)的地址，只有CLONE\_SETTLS标志有效才有意义
+    \item ptid
+    \subitem 表示父进程的用户态变量地址，该父进程具有与新轻量级进程一样的PID，只有在CLONE\_PARENT\_SETTID有效才有意义
+    \item ctid
+    \subitem 表示轻量级进程用户态变量地址，只有CLONE\_CHILD\_SETTID标志有效才有意义
+\end{itemize}
+
+\begin{lstlisting}[language=C++, caption={clone flags}]
+/* set if VM shared between processes */
+#define CLONE_VM	0x00000100	
+/* set if fs info shared between processes */
+#define CLONE_FS	0x00000200	
+/* set if open files shared between processes */
+#define CLONE_FILES	0x00000400	
+/* set if signal handlers and blocked signals shared */
+#define CLONE_SIGHAND	0x00000800	
+/* set if we want to let tracing continue on the child too */
+#define CLONE_PTRACE	0x00002000	
+/* set if the parent wants the child to wake it up on mm_release */
+#define CLONE_VFORK	0x00004000	
+/* set if we want to have the same parent as the cloner */
+#define CLONE_PARENT	0x00008000	
+/* Same thread group? */
+#define CLONE_THREAD	0x00010000	
+/* New namespace group? */
+#define CLONE_NEWNS	0x00020000	
+/* share system V SEM_UNDO semantics */
+#define CLONE_SYSVSEM	0x00040000	
+/* create a new TLS for the child */
+#define CLONE_SETTLS	0x00080000	
+/* set the TID in the parent */
+#define CLONE_PARENT_SETTID	0x00100000	
+/* clear the TID in the child */
+#define CLONE_CHILD_CLEARTID	0x00200000	
+/* Unused, ignored */
+#define CLONE_DETACHED		0x00400000	
+/* set if the tracing process can't force CLONE_PTRACE on this clone */
+#define CLONE_UNTRACED		0x00800000	
+/* set the TID in the child */
+#define CLONE_CHILD_SETTID	0x01000000	
+/* Start in stopped state */
+#define CLONE_STOPPED		0x02000000	
+\end{lstlisting}
+
+    事实上，clone是C语言库中的一个封装函数，负责建立新轻量级进程的堆栈并且调用对编程者隐藏的clone系统调用。
+
+    实现clone的sys\_clone服务例程没有fn和arg参数。封装函数把fn指针放在子进程堆栈中的某个位置，该位置就是该封装函数本身返回地址存放的位置。arg指针正好存放在子进程堆栈中fn的下方
+
+    传统的fork系统调用是由clone实现的，其中clone的flags参数指定为SIGCHLD信号及所有清零的clone标志，child\_stack由父进程当前的堆栈指针。因此，父子进程暂时共享一个用户态堆栈(但是由于写时拷贝机制，通常只要其中一个进程更改栈，就会立即得到各自的用户态堆栈拷贝)
+
+\begin{lstlisting}[language=C++]
+long sys_clone(
+    unsigned long clone_flags, unsigned long newsp,
+    int __user *parent_tid, int unused, int __user *child_tid)
+\end{lstlisting}
