@@ -1,4 +1,4 @@
-obj-m := hello.o export_symbol.o use_export_module.o
+obj-m := hello.o export_symbol.o use_export_module.o error_handle_1.o error_handle_2.o module_param_1.o module_param_2.o
 INCLUDE_DIR := /lib/modules/$(shell uname -r)/build
 # INCLUDE_DIR := /usr/src/linux-2.6.10
 
