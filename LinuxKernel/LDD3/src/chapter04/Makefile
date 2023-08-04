@@ -1,4 +1,4 @@
-obj-m := test_debug.o
+obj-m := test_debug.o test_proc.o
 INCLUDE_DIR := /lib/modules/$(shell uname -r)/build
 # INCLUDE_DIR := /usr/src/linux-2.6.10
 
