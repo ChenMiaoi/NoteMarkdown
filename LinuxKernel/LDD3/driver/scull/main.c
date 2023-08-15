@@ -69,8 +69,12 @@ int scull_open(struct inode* inode, struct file* filp) {
 	/* if open to write, trim the device to 0 length */
 	if ((filp->f_flags & O_ACCMODE) == O_WRONLY) {
 		/* need to lock */
+		if (down_interruptible(&dev->sem)) {
+			return -ERESTARTSYS;
+		}
 		scull_trim(dev);
 		/* need to unlock */
+		up(&dev->sem);
 	}
 	return 0;
 }
@@ -121,8 +125,11 @@ ssize_t scull_read(struct file* filp, char __user* buf, size_t count, loff_t* f_
 	ssize_t ret_val = 0;
 
 	/* need to lock */
+	if (down_interruptible(&dev->sem)) 
+		return -ERESTARTSYS;
+	
 	if (*f_pos >= dev->size) 						/* the pos start over the size */
-		return -ERESTART;
+		goto out;
 	if (*f_pos + count > dev->size)					/* the read size over the size */
 		count = dev->size - *f_pos;
 
@@ -150,6 +157,7 @@ ssize_t scull_read(struct file* filp, char __user* buf, size_t count, loff_t* f_
 	
 out:
 	/* need unlock */
+	up(&dev->sem);
 	return ret_val;
 }
 
@@ -162,7 +170,8 @@ ssize_t scull_write(struct file* filp, const char __user* buf, size_t count, lof
 	ssize_t ret_val = -ENOMEM;
 
 	/* need to lock */
-
+	if (down_interruptible(&dev->sem))
+		return -ERESTARTSYS;
 	
 	/* to find data pos where can read start */
 	item = (long)*f_pos / item_size;				/* the Nth node */
@@ -201,6 +210,7 @@ ssize_t scull_write(struct file* filp, const char __user* buf, size_t count, lof
 	
 out:
 	/* need to unlock */
+	up(&dev->sem);
 	return ret_val;
 }
 
@@ -216,10 +226,15 @@ struct file_operations scull_ops = {
 
 void scull_cleanup_module(void) {
 	int i;
-	dev_t devno = MKDEV(scull_major, scull_minor);
+	dev_t devno;
 
 	/* clean device */
-	device_destroy(scull_device_class, devno);
+	for (i = 0; i < scull_nr_devs; i++) {
+		devno = MKDEV(scull_major, scull_minor + i);
+		device_destroy(scull_device_class, devno);
+	}
+
+	/* clean class */
 	class_destroy(scull_device_class);
 
 	/* clean cdev structure */
@@ -239,7 +254,7 @@ void scull_cleanup_module(void) {
 static void scull_setup_cdev(struct scull_dev* dev, int index) {
 	// printk(KERN_ALERT "start to setup cdev structure\n");
 	int err, devno = MKDEV(scull_major, scull_minor + index); /* because scull0 ~ scull3 */
-	char class_name[13] = {"scull_class"}, device_name[7] = {"scull"};
+	char device_name[7] = {"scull"};
 	// printk(KERN_ALERT "\tthe devno: %d\tindex:%d\n", devno, index);
 
 	cdev_init(&dev->cdev, &scull_ops);
@@ -251,10 +266,13 @@ static void scull_setup_cdev(struct scull_dev* dev, int index) {
 		printk(KERN_NOTICE "Error %d adding scull%d", err, index);
 	}
 	
-	class_name[11] = (char)(index + 48), device_name[5] = (char)(index + 48);
-	class_name[12] = '\0', device_name[6] = '\0';
-	scull_device_class = class_create(THIS_MODULE, class_name);
+	device_name[5] = (char)(index + 48), device_name[6] = '\0';
+
 	scull_device_file = device_create(scull_device_class, NULL, devno, NULL, device_name);
+	printk(KERN_ALERT "devno major: %d, minor: %d, %s\n", MAJOR(devno), MINOR(devno), device_name);
+	if (IS_ERR(scull_device_class)) {
+		printk(KERN_ERR "scull: can't create a device file\n");
+	}
 	// printk(KERN_ALERT "end to setup\n");
 }
 
@@ -287,6 +305,13 @@ int scull_init_module(void) {
 	}
 	memset(scull_device, 0, scull_nr_devs * sizeof(struct scull_dev));
 
+	/* create device class */
+	scull_device_class = class_create(THIS_MODULE, "scull_class");
+	if (IS_ERR(scull_device_class)) {
+		printk(KERN_ERR "scull: can't create a device class\n");
+		result = -EFAULT;
+	}
+	
 	/* for initialize each device */
 	for (i = 0; i < scull_nr_devs; i++) {
 		scull_device[i].quantum = scull_quantum;
