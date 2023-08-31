@@ -703,3 +703,256 @@ $$
 
     通常而言，模式切换指的是\emph{用户态与内核态之间的状态切换，其不会改变当前进程。}上下文切换\emph{\color{red}只会发生在内核态，是多任务OS中的一个必需的属性。}
 
+\section{同步与互斥}
+
+\subsection{同步与互斥的基本概念}
+
+\subsubsection{临界资源}
+
+    \emph{在OS中，多个进程可以共享各种资源，但其中许多资源一次只能为一个进程使用，因此\color{red}将一次仅能一个进程使用的资源称为临界资源}。
+
+    对临界资源的访问必须互斥的进行，每个进程中，\emph{访问临界资源的那段代码称为临界区}：
+
+\begin{itemize}
+    \item [1)] 进入区。检查进程是否能够使用临界资源，且阻止其他进程同时进入临界区。
+    \item [2)] 临界区。进程中访问临界资源的代码段
+    \item [3)] 退出区。修改临界标志
+    \item [4)] 剩余区。代码中其余部分
+\end{itemize}
+
+\subsubsection{同步}
+
+    同步可以称为\emph{直接制约关系，指为完成某种任务而建立的两个或多个进程，因为需要在某些位置上协调工作次序而等待、传递信息所产生的制约关系。}
+
+\subsubsection{互斥}
+
+    互斥可以称为\emph{间接制约关系，当一个进程进入临界区后，另一个进程必须等待其完成才能访问。}
+
+    为禁止两个进程同时进入临界区，同步机制应遵循：
+
+\begin{itemize}
+    \item [1)] 空闲让进。临界区空闲时，可以允许一个请求进入临界区的进程立即进入
+    \item [2)] 忙则等待。当已有进程进入临界区时，其他试图进入临界区的进程必须等待
+    \item [3)] 有限等待。对请求访问的进程，应保证能在有限时间内进入临界区
+    \item [4)] 让权等待。当进程不能进入临界区时，应立即释放处理器，防止进程忙等待
+\end{itemize}
+
+\subsection{实现临界区互斥的基本方法}
+
+\subsubsection{软件实现方法}
+
+\paragraph{单标志法}
+
+    \emph{通过设置一个公用整型变量，用于指示被允许进入临界区的进程编号。}该算法良好的保证了一次只允许一个进程进入，\emph{\color{red}但两个进程必须交替进入，若某个进程不再进入，另一个进程则也无法进入：违背空闲让进原则}。
+
+\begin{lstlisting}[language=C++]
+P0:                         P1:
+    while (turn != 0) ;         while (turn != 1) ;
+    critical section ;          critical section ;
+    turn = 1 ;                  turn = 0 ;
+    remainder section ;         remainder section ;
+\end{lstlisting}
+
+\paragraph{双标志法先检查}
+
+    \emph{通过在进程访问临界区资源之前，先检查临界区资源是否被访问，若正在被访问，则等待。}该算法避免了交替进入，\emph{但是由于两个进程并发可能“同时”进入临界区导致违背忙则等待原则}。
+
+\begin{lstlisting}[language=C++]
+P0:                             P1:
+    while (flag[0]) ;               while (flag[1]) ;
+    flag[1] = true ;                flag[0] = true ;
+    critical section ;              critical section ;
+    flag[0] = false ;               flag[1] = false ;
+    remainder section ;             remainder section ;
+\end{lstlisting}
+
+\paragraph{双标志法后检查}
+
+    \emph{为了防止同时进入临界区，可以先标识自身，然后检查对方的意愿。}避免了同时进入临界区，\emph{但导致了更严重的问题，二者都无法进入临界区使得\color{red}饥饿现象的出现}。
+
+\begin{lstlisting}[language=C++]
+P0:                             P1:
+    flag[0] = true ;                flag[1] = true ;
+    while (flag[1]) ;               while (flag[0]) ;
+    critical section ;              critical section ;
+    flag[0] = false ;               flag[1] = false ;
+    remainder section ;             remainder section ;   
+\end{lstlisting}
+
+\paragraph{Peterson's Algorithm} 
+
+    \emph{为了防止进程进入临界区无限期等待，设置一个类似于单标志法的共有变量，主体是双标志法和单标志法的综合。}
+
+\begin{lstlisting}[language=C++]
+P0:                             P1:
+    flag[0] = true ;                flag[1] = true ;
+    turn = 1;                       turn = 0;
+    while (flag[1] && turn == 1) ;  while (flag[0] && turn == 0) ;
+    critical section ;              critical section ;
+    flag[0] = false ;               flag[1] = false ;
+    remainder section ;             remainder section ;     
+\end{lstlisting}
+
+\subsubsection{硬件实现方法}
+
+    \emph{计算机硬件提供了特殊的指令，允许对一个字中的内容进行检测和修整，或进行交换等，通过硬件支持实现临界段问题的方法称为低级方法，或元方法。}
+
+\paragraph{中断屏蔽方法}
+
+    \emph{一个进程正在执行临界区代码时，防止其他进程进入的最简方法是关中断。}但是，这种方法限制了处理机交替执行程序的能力，且中断指令是内核态的特权指令。
+
+\paragraph{硬件指令方法}
+
+\subparagraph{TestAndSet指令}
+
+    又称TS或TSL指令。该指令是原子操作，即执行该代码时不允许被中断。其功能是读出指定标志后把该标志设置为真：
+
+\begin{lstlisting}[language=C++]
+bool TestAndSet (bool* lock) {
+    bool old = *lock;
+    *lock = true;
+    return old;
+}
+
+while (TestAndSet(&lock)) ;
+...
+lock = false;
+...
+\end{lstlisting}
+
+\subparagraph{Swap指令}
+
+    又称Exchange或XCHG指令。
+
+\begin{lstlisting}[language=C++]
+void Swap (bool* a, bool* b) {
+    bool temp = *a;
+    *a = *b;
+    *b = temp;
+}
+\end{lstlisting}
+
+    值得注意的是，上述的C代码仅仅是对其功能的描述，真实的设计是在硬件上直接完成的。
+
+    \emph{硬件方法的优点在于：适用于任意数目的进程，简单、容易检验其正确性，支持多个临界区。}
+
+    \emph{其缺点在于：不能实现让权等待原则，可能导致饥饿现象。}
+
+\subsection{互斥锁}
+
+    \emph{解决临界区最简单的工具就是互斥锁(mutex lock)。}值得注意的是，互斥锁的申请和释放都必须是原子操作。\emph{互斥锁的主要缺点是忙等待，因为在进入临界区判断时，会一直自旋。}
+
+    \emph{需要连续循环忙等的互斥锁，可以叫做自旋锁(spin lock)。}
+
+\begin{lstlisting}[language=C++]
+acquire() {
+    while (!available) ;
+    available = false;
+}
+
+release() {
+    available = true;
+}
+\end{lstlisting}
+
+\subsection{信号量}
+
+    \emph{信号量机制时一种功能较强的机制，用于解决互斥同步问题，由OS提供的一对原语：wait和signal操作。}
+
+    \emph{一般来说，这对原语也被称为PV操作，因此P(S)和V(S)分别代表了wait(S)和signal(S)。\color{red}注意：在做题时，P(S)、V(S)默认代表记录型信号量}。
+
+\subsubsection{整型信号量}
+
+    整型信号量被定义为一个用于表示资源数目的整型量S。
+
+\begin{lstlisting}[language=C++]
+wait(S) {
+    while (S <= 0) ;
+    S = S - 1;
+}
+
+signal(S) {
+    S = S + 1
+}
+\end{lstlisting}
+
+    可以看见，对于整型信号量\emph{\color{red}未能解决忙等问题}。
+
+\subsubsection{记录型信号量}
+
+    记录型信号量是一种\emph{\color{red}不存在忙等现象的进程同步机制}。其内部不仅仅由一个代表资源数目的变量组成，还由一个进程链表，用于链接所有等待该资源的进程。
+
+\begin{lstlisting}[language=C++]
+typedef struct {
+    int value;
+    struct task_struct* task;
+} semaphore;
+
+void wait(semaphore S) {
+    if (--S.value < 0) {
+        add this task to S.task;
+        block(S.task);
+    }
+}
+void signal(semaphore S) {
+    if (++S.value <= 0) {
+        remove a task T from S.task;
+        wakeup(T);
+    }
+}
+\end{lstlisting}
+
+    对于记录型信号量来说，wait操作统计资源数，如果资源耗尽，那么就需要将当前请求资源的进程进行阻塞等待资源，这样就使得不会忙等，让出了处理机资源。当一个拥有资源的进程用完后，进入signal，对资源进行复原，如果资源仍旧小于等于0，那么就说明，有进程在申请该资源，则将申请资源的进程从阻塞队列中唤醒即可。
+
+\subsubsection{利用信号量实现同步}
+
+\begin{lstlisting}[language=C++]
+semaphore S = 0;
+P1() {              P2() {
+    stmt1...            P(S);
+    V(S);               stmt1...
+    ...                 ...
+}                   }
+\end{lstlisting}
+
+    上述实现的意义为：P2()中的某一些操作必须在P1()中的某些操作执行完之后执行。通过V(S)对P2进行唤醒。
+
+\subsubsection{利用信号量实现互斥}
+
+\begin{lstlisting}[language=C++]
+semaphore S = 1;
+P1() {              P2() {
+    P(S);               P(S);
+    stmt1...            stmt1...
+    V(S);               V(S);
+    ...                 ...
+}                   }
+\end{lstlisting}
+
+\subsubsection{利用信号量实现前驱关系}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{image/chapter02/利用信号量实现前驱.png}
+    \caption{利用信号量实现前驱关系}
+\end{figure}
+
+\begin{lstlisting}[language=C++]
+semaphore s1_1 = s1_2 = s2_1 = s2_2 = s3 = s4 = s5 = 0;
+S1() {        |  S2() {        |  S3() {
+    ...       |      P(s1_1);  |      P(s1_2);
+    V(s1_1);  |      ...       |      ...
+    V(s1_2);  |      V(s2_1);  |      V(s3);
+}             |      V(s2_2);  |  }
+              |  }             |
+----------------------------------------------
+S4() {        |  S5() {        |  S6() {
+    P(s2_1);  |      P(s2_2);  |      P(s4);
+    ...       |      ...       |      P(s5);
+    V(s4);    |      V(s_5);   |      P(s6);
+}             |  }             |      ...
+              |                |  }
+\end{lstlisting}
+
+    可以看见，其实依赖关系通过P(S)来阻塞，依赖关系一旦满足，则使用V(S)来解除依赖即可。因此，\emph{做题时，对于同步或多级同步来说，只需要V前P后即可满足。}
+
