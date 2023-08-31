@@ -1,5 +1,6 @@
 import lexer.*;
 import symbols.*;
+import inter.*;
 
 import java.io.IOException;
 

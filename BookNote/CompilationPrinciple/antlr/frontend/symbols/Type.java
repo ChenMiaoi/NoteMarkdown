@@ -17,4 +17,18 @@ public class Type extends Word {
         super(lexeme, tag);
         this.width = width;
     }
+
+    public static boolean numeric (Type type) {
+        return type == Type.Char || type == Type.Int || type == Type.Float;
+    }
+
+    public static Type max (Type type1, Type type2) {
+        if (!numeric(type1) || !numeric(type2))
+            return null;
+        else if (type1 == Type.Float || type2 == Type.Float)
+            return Type.Float;
+        else if (type1 == Type.Int || type2 == Type.Int)
+            return Type.Int;
+        else return Type.Char;
+    }
 }
