@@ -1,5 +1,6 @@
-package inter;
+package inter.expr;
 
+import inter.Expr;
 import lexer.*;
 import symbols.*;
 public class Id extends Expr {

@@ -1,5 +1,7 @@
-package inter;
+package inter.expr.logical;
 
+import inter.Expr;
+import inter.expr.Logical;
 import lexer.Token;
 
 public class Or extends Logical {

@@ -6,7 +6,7 @@ public class Expr extends Node {
     public Token op;
     public Type type;
 
-    Expr (Token token, Type type) {
+    public Expr (Token token, Type type) {
         op = token;
         this.type = type;
     }

@@ -9,7 +9,7 @@ public class Node {
         lexline = Lexer.line;
     }
 
-    void error (String str) {
+    public void error (String str) {
         throw new Error("near line " + lexline + ": " + str);
     }
     public int newlabel() { return ++labels; }

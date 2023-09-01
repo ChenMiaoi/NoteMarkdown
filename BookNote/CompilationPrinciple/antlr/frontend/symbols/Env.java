@@ -1,6 +1,6 @@
 package symbols;
 
-import inter.*;
+import inter.expr.Id;
 import lexer.*;
 
 import java.util.Hashtable;

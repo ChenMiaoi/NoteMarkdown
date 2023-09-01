@@ -1,12 +1,14 @@
-package inter;
+package inter.expr;
 
+import inter.*;
+import inter.expr.*;
 import lexer.*;
 import symbols.*;
 
 public class Logical extends Expr {
     public Expr expr1, expr2;
 
-    Logical(Token token, Expr expr1, Expr expr2) {
+    public Logical(Token token, Expr expr1, Expr expr2) {
         super(token, null);
         this.expr1 = expr1;
         this.expr2 = expr2;

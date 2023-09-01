@@ -1,5 +1,7 @@
-package inter;
+package inter.expr.operator;
 
+import inter.Expr;
+import inter.expr.Op;
 import lexer.*;
 import symbols.*;
 

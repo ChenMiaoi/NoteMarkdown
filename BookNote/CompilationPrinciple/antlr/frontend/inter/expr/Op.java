@@ -1,5 +1,7 @@
-package inter;
+package inter.expr;
 
+import inter.Expr;
+import inter.expr.Temp;
 import lexer.*;
 import symbols.*;
 public class Op extends Expr {
